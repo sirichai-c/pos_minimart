@@ -16,7 +16,13 @@ def subtract_numbers(a: int, b: int) -> int:
     return a - b
 
 
+def square_number(number: int) -> int:
+    """Return the square of an integer."""
+    return number ** 2
+
+
 if __name__ == "__main__":
     print(f"2 + 3 = {add_numbers(2, 3)}")
     print(f"2 * 3 = {multiply_numbers(2, 3)}")
     print(f"8 - 3 = {subtract_numbers(8, 3)}")
+    print(f"4 ** 2 = {square_number(4)}")
