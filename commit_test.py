@@ -11,6 +11,12 @@ def multiply_numbers(a: int, b: int) -> int:
     return a * b
 
 
+def subtract_numbers(a: int, b: int) -> int:
+    """Return the difference between two integers."""
+    return a - b
+
+
 if __name__ == "__main__":
     print(f"2 + 3 = {add_numbers(2, 3)}")
     print(f"2 * 3 = {multiply_numbers(2, 3)}")
+    print(f"8 - 3 = {subtract_numbers(8, 3)}")
