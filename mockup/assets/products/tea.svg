@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="ชาเขียวขวด BAANDI">
+  <defs><radialGradient id="shadow"><stop stop-color="#304d3b" stop-opacity=".17"/><stop offset="1" stop-color="#304d3b" stop-opacity="0"/></radialGradient><linearGradient id="bottle" x2="1" y2="0"><stop stop-color="#afc291"/><stop offset=".25" stop-color="#e1ebcf"/><stop offset=".8" stop-color="#ccdeaf"/><stop offset="1" stop-color="#9cae7e"/></linearGradient></defs>
+  <ellipse cx="80" cy="141" rx="46" ry="8" fill="url(#shadow)"/>
+  <path d="M69 29v20c0 6-10 11-10 18v61q0 8 9 8h24q9 0 9-8V67c0-7-10-12-10-18V29Z" fill="url(#bottle)" stroke="#9fb28a"/>
+  <rect x="67" y="20" width="26" height="15" rx="3" fill="#416d4b"/>
+  <path d="M68 27h24" stroke="#274e38"/>
+  <rect x="59" y="72" width="42" height="45" fill="#4d7853"/>
+  <text x="80" y="87" text-anchor="middle" font-family="Arial,sans-serif" font-size="7" font-weight="700" letter-spacing="1" fill="#f9f5db">BAANDI</text>
+  <text x="80" y="100" text-anchor="middle" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#fff8dd">GREEN TEA</text>
+  <path d="M80 109q-10-3-10-11 10 0 10 11 1-12 12-14 0 10-12 14Z" fill="#c4d8a0"/>
+  <path d="M66 57v66" stroke="#fff" stroke-width="3" opacity=".33"/>
+</svg>

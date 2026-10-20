@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="ปลากระป๋อง BAANDI">
+  <defs><radialGradient id="shadow"><stop stop-color="#304d3b" stop-opacity=".17"/><stop offset="1" stop-color="#304d3b" stop-opacity="0"/></radialGradient><linearGradient id="tin" x2="1" y2="0"><stop stop-color="#d8e0df"/><stop offset=".22" stop-color="#fff"/><stop offset=".8" stop-color="#e7efed"/><stop offset="1" stop-color="#bac9c5"/></linearGradient></defs>
+  <ellipse cx="80" cy="141" rx="51" ry="8" fill="url(#shadow)"/>
+  <rect x="35" y="49" width="90" height="82" rx="13" fill="url(#tin)" stroke="#aabbb7"/>
+  <ellipse cx="80" cy="50" rx="45" ry="9" fill="#dce6e3" stroke="#aabbb7"/>
+  <ellipse cx="80" cy="49" rx="37" ry="5" fill="#f6faf9" stroke="#b9c8c4"/>
+  <path d="M70 47h21" stroke="#9caaa8" stroke-width="2" stroke-linecap="round"/>
+  <rect x="39" y="65" width="82" height="49" fill="#b9493b"/>
+  <path d="M39 65h82v7H39z" fill="#d66d4c"/>
+  <text x="80" y="80" text-anchor="middle" font-family="Arial,sans-serif" font-size="8" font-weight="700" letter-spacing="1.2" fill="#fff3d8">BAANDI</text>
+  <path d="M52 97q22-19 43 0l13-8v17l-13-8q-22 20-43-1Z" fill="#f4d298"/>
+  <circle cx="63" cy="96" r="2" fill="#7b523e"/>
+  <path d="M87 91q-5 8 0 14" fill="none" stroke="#d9a875" stroke-width="2"/>
+  <text x="80" y="125" text-anchor="middle" font-family="Arial,sans-serif" font-size="7" font-weight="700" fill="#6b7673">TOMATO SARDINES</text>
+</svg>

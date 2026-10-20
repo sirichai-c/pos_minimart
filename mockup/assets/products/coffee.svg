@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="กาแฟกระป๋อง BAANDI">
+  <defs><radialGradient id="shadow"><stop stop-color="#304d3b" stop-opacity=".17"/><stop offset="1" stop-color="#304d3b" stop-opacity="0"/></radialGradient><linearGradient id="can" x2="1" y2="0"><stop stop-color="#7e5138"/><stop offset=".22" stop-color="#b27a54"/><stop offset=".8" stop-color="#a36845"/><stop offset="1" stop-color="#71462f"/></linearGradient></defs>
+  <ellipse cx="80" cy="141" rx="43" ry="8" fill="url(#shadow)"/>
+  <rect x="54" y="29" width="52" height="105" rx="8" fill="url(#can)" stroke="#745039"/>
+  <ellipse cx="80" cy="31" rx="26" ry="7" fill="#dce1dc" stroke="#aab3ad"/>
+  <ellipse cx="80" cy="30" rx="17" ry="3.5" fill="#f7f8f4"/>
+  <path d="M74 29h13" stroke="#9ba6a0" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="55" y="60" width="50" height="54" fill="#f3e4c8"/>
+  <text x="80" y="75" text-anchor="middle" font-family="Arial,sans-serif" font-size="8" font-weight="700" letter-spacing="1" fill="#76523c">BAANDI</text>
+  <text x="80" y="91" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" font-weight="700" fill="#65422d">COFFEE</text>
+  <path d="M67 104q12-11 26 0" fill="none" stroke="#946344" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="80" cy="133" rx="26" ry="5" fill="#785039"/>
+  <path d="M61 45v80" stroke="#fff" stroke-width="3" opacity=".18"/>
+</svg>
