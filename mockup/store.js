@@ -73,11 +73,11 @@
     ];
     const products = catalog.map(([id,name,sku,barcode,price,stock,category,image]) => ({id,name,sku,barcode,price,stock,category,image,active:true}));
     const shift = { id: uuid(), openedAt: timestamp(180), closedAt: null, opening: 100000, userId: 'owner' };
-    const state = { version: 1, products, users: [
+    const state = { version: 2, products, users: [
       { id:'owner', name:'พิมพ์ · เจ้าของร้าน', username:'owner', role:'owner', active:true },
       { id:'cashier', name:'เมย์ · พนักงานขาย', username:'cashier', role:'cashier', active:true }
-    ], currentUserId:'owner', shifts:[shift], activeShiftId:shift.id, sales:[], stockMovements:[], cashMovements:[],
-      audit:[], backup:{lastSnapshot:null,lastUpload:null,pending:0,history:[]}, online:true, pendingCheckout:null, requests:{} };
+    ], currentUserId:'owner', shifts:[shift], activeShiftId:shift.id, sales:[], returns:[], cashRefunds:[], stockMovements:[], cashMovements:[],
+      audit:[], backup:{lastSnapshot:null,lastUpload:null,pending:0,history:[]}, online:true, pendingCheckout:null, pendingReturn:null, requests:{} };
     products.forEach(p => state.stockMovements.push({id:uuid(),productId:p.id,kind:'initial',quantity:p.stock,balance:p.stock,reason:'ยอดตั้งต้นร้านตัวอย่าง',createdAt:timestamp(181),userId:'owner',reference:'demo-opening'}));
     const baskets = [[['water',2],['bread',1]],[['coffee',1],['noodles',3]],[['milk',2],['snack',1]],[['rice',1],['fish',2]]];
     baskets.forEach((basket,index) => {
@@ -86,7 +86,7 @@
         const p = products.find(p => p.id === id);
         p.stock -= quantity;
         state.stockMovements.push({id:uuid(),productId:id,kind:'sale',quantity:-quantity,balance:p.stock,reason:'ขายหน้าร้าน',createdAt:timestamp(120-index*20),userId:'cashier',reference:saleId});
-        return {productId:id,name:p.name,sku:p.sku,unitPrice:p.price,quantity,total:p.price*quantity};
+        return {id:uuid(),productId:id,name:p.name,sku:p.sku,unitPrice:p.price,quantity,total:p.price*quantity};
       });
       const total = items.reduce((s,i) => s+i.total,0);
       const tendered = Math.ceil(total/10000)*10000;
@@ -112,10 +112,29 @@
     try { saved = storage.getItem(key); }
     catch (_) { error('STORAGE_FAILED','อ่านข้อมูลไม่ได้ กรุณาตรวจสิทธิ์พื้นที่จัดเก็บของเบราว์เซอร์'); }
     if (saved) {
+      let loaded;
       try {
-        state = JSON.parse(saved);
-        if (state.version !== 1 || !Array.isArray(state.products) || !Array.isArray(state.sales) || !state.requests || !Array.isArray(state.users)) throw new Error();
+        loaded = JSON.parse(saved);
+        if (![1,2].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
+        if (loaded.sales.some(sale=>typeof sale.id!=='string'||!Array.isArray(sale.items)||sale.items.some(line=>typeof line.productId!=='string'||!Number.isSafeInteger(line.quantity)||!Number.isSafeInteger(line.unitPrice)))) throw new Error();
+        if (loaded.version === 2 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds))) throw new Error();
       } catch (_) { error('STORAGE_INVALID','ข้อมูลตัวอย่างที่บันทึกไว้ไม่ถูกต้อง กรุณาตรวจข้อมูลก่อนล้างข้อมูลตัวอย่าง'); }
+      if (loaded.version === 1) {
+        const migrated = clone(loaded);
+        migrated.version = 2;
+        migrated.sales.forEach(sale => sale.items.forEach((line,index) => { if (!line.id) line.id = sale.id + '-line-' + (index + 1); }));
+        migrated.shifts.forEach(shift=>{if(shift.summary){shift.summary.refunds??=0;shift.summary.returnCount??=0;}});
+        Object.values(migrated.requests).forEach(entry=>{
+          if(entry?.action!=='checkout'||!entry.result?.id)return;
+          const sale=migrated.sales.find(item=>item.id===entry.result.id);
+          if(sale)entry.result=clone(sale);
+        });
+        migrated.returns = [];
+        migrated.cashRefunds = [];
+        migrated.pendingReturn = null;
+        // Keep the old key and only replace it after the entire migration can be written.
+        persist(migrated);
+      } else state = loaded;
     } else persist(seed());
     function transaction(work) {
       const next = clone(state);
@@ -158,11 +177,25 @@
     function totals(sales) {
       return sales.reduce((r,s) => { r.gross=safe(r.gross+s.total); if(s.voidedAt) r.voids=safe(r.voids+s.total); r.saleCount++; r.net=r.gross-r.voids; return r; },{gross:0,voids:0,net:0,saleCount:0});
     }
+    function returnable(s,saleId) {
+      const sale=s.sales.find(entry=>entry.id===saleId);
+      if(!sale)error('SALE_NOT_FOUND','ไม่พบบิล');
+      const returns=s.returns.filter(entry=>entry.saleId===saleId);
+      const lines=sale.items.map(line=>{
+        const returnedQuantity=returns.reduce((count,entry)=>safe(count+entry.lines.filter(item=>item.saleLineId===line.id).reduce((n,item)=>safe(n+item.quantity),0)),0);
+        return {...clone(line),returnedQuantity,remainingQuantity:safe(line.quantity-returnedQuantity)};
+      });
+      const refunded=returns.reduce((sum,entry)=>safe(sum+entry.total),0);
+      const status=returns.length===0?'none':lines.every(line=>line.remainingQuantity===0)?'full':'partial';
+      return {sale:clone(sale),lines,returns:clone(returns),refunded,status};
+    }
     function summary(s, shiftId) {
       const shift = s.shifts.find(sh => sh.id === shiftId);
       if (!shift) error('SHIFT_NOT_FOUND','ไม่พบกะ');
       if (shift.summary) return clone(shift.summary);
-      const result = {opening:shift.opening,...totals(s.sales.filter(sale=>sale.shiftId===shift.id)),cashIn:0,cashOut:0,counted:null,difference:null};
+      const result = {opening:shift.opening,...totals(s.sales.filter(sale=>sale.shiftId===shift.id)),refunds:0,returnCount:0,cashIn:0,cashOut:0,counted:null,difference:null};
+      s.cashRefunds.filter(refund=>refund.shiftId===shift.id).forEach(refund=>{result.refunds=safe(result.refunds+refund.amount);result.returnCount++;});
+      result.net=safe(result.net-result.refunds);
       s.cashMovements.filter(m=>m.shiftId===shift.id).forEach(m => { const field=m.kind==='in'?'cashIn':'cashOut'; result[field]=safe(result[field]+m.amount); });
       result.expected=safe(safe(safe(result.opening+result.net)+result.cashIn)-result.cashOut);
       return result;
@@ -170,7 +203,9 @@
     return {
       getState: () => clone(state),
       getPendingCheckout: () => clone(state.pendingCheckout),
-      setUser(userId) { user(state,userId); return transaction(s=>{s.currentUserId=userId;return s.users.find(u=>u.id===userId);}); },
+      getPendingReturn: () => clone(state.pendingReturn),
+      getReturnable(saleId) { return clone(returnable(state,saleId)); },
+      setUser(userId) { user(state,userId); if(state.pendingCheckout||state.pendingReturn)error('RECOVERY_REQUIRED','กรุณาตรวจผลรายการที่ยังไม่ทราบก่อนเปลี่ยนผู้ใช้'); return transaction(s=>{s.currentUserId=userId;return s.users.find(u=>u.id===userId);}); },
       reset() { const next=seed();persist(next);return clone(next); },
       checkout(args) {
         const actor=user(state,args.userId);
@@ -181,6 +216,7 @@
         // Replayed checkout is resolved before price/stock/open-shift validation.
         if (previous) return {sale:request('checkout',requestArgs,()=>{})};
         if (state.pendingCheckout) error('CHECKOUT_UNRESOLVED','กรุณากู้ผลการขายเดิมก่อนเริ่มบิลใหม่');
+        if (state.pendingReturn) error('RETURN_UNRESOLVED','กรุณากู้ผลรายการคืนเดิมก่อนเริ่มบิลใหม่');
         if (simulation==='failure') error('CHECKOUT_FAILED','จำลองบันทึกล้มเหลว ยังไม่มีการขาย กรุณาลองคำขอเดิม');
         const sale=request('checkout',requestArgs,(s,userId)=>{
           const shift=open(s);
@@ -197,7 +233,7 @@
           const items=Array.from(aggregated,([productId,quantity])=>{
             const p=s.products.find(p=>p.id===productId);
             if(p.stock<quantity) error('INSUFFICIENT_STOCK','สินค้า '+p.name+' มีคงเหลือไม่พอ');
-            return {productId,name:p.name,sku:p.sku,unitPrice:p.price,quantity,total:safe(p.price*quantity)};
+            return {id:uuid(),productId,name:p.name,sku:p.sku,unitPrice:p.price,quantity,total:safe(p.price*quantity)};
           });
           const total=items.reduce((sum,line)=>safe(sum+line.total),0);
           if(args.tendered<total) error('INSUFFICIENT_CASH','เงินรับไม่พอชำระยอดบิล');
@@ -216,6 +252,61 @@
         const sale=state.sales.find(s=>s.id===pending.saleId);
         if(!sale) error('RECOVERY_FAILED','ยังไม่พบผลบิลเดิม กรุณาตรวจข้อมูลก่อนขายซ้ำ');
         return transaction(s=>{s.pendingCheckout=null;return sale;});
+      },
+      createReturn(args) {
+        const actor=user(state,args.userId,true);
+        const simulation=args.simulate||'none';
+        if(!['none','unresolved','failure'].includes(simulation))error('INVALID_SIMULATION','รูปแบบทดสอบไม่ถูกต้อง');
+        const requestArgs={key:args.key,userId:actor.id,saleId:args.saleId,lines:args.lines,reason:args.reason,cashPaidConfirmed:args.cashPaidConfirmed};
+        const previous=state.requests['request:'+text(args.key,'รหัสคำขอ')];
+        if(previous)return {return:request('return',requestArgs,()=>{})};
+        if(state.pendingReturn)error('RETURN_UNRESOLVED','กรุณากู้ผลรายการคืนเดิมก่อนเริ่มรายการใหม่');
+        if(state.pendingCheckout)error('CHECKOUT_UNRESOLVED','กรุณากู้ผลการขายเดิมก่อนเริ่มรายการคืน');
+        if(simulation==='failure')error('RETURN_FAILED','จำลองบันทึกคืนสินค้าไม่สำเร็จ กรุณาลองคำขอเดิม');
+        const result=request('return',requestArgs,(s,userId)=>{
+          const shift=open(s);
+          const source=returnable(s,args.saleId);
+          if(source.sale.voidedAt)error('SALE_VOIDED','บิลนี้ยกเลิกแล้ว คืนสินค้าไม่ได้');
+          const reason=text(args.reason,'เหตุผลคืนสินค้า');
+          if(args.cashPaidConfirmed!==true)error('CASH_CONFIRMATION_REQUIRED','กรุณายืนยันว่าจ่ายเงินสดให้ลูกค้าแล้ว');
+          if(!Array.isArray(args.lines)||!args.lines.length)error('INVALID_RETURN_LINE','กรุณาเลือกสินค้าที่รับคืน');
+          const seen=new Set();
+          const id=uuid();
+          const lines=args.lines.map(input=>{
+            const original=source.lines.find(line=>line.id===input.saleLineId);
+            if(!original||seen.has(input.saleLineId))error('INVALID_RETURN_LINE','รายการสินค้าคืนไม่ตรงกับบิลหรือซ้ำกัน');
+            seen.add(input.saleLineId);
+            integer(input.quantity,'จำนวนคืน',1);
+            integer(input.restockQuantity,'จำนวนขายต่อได้');
+            integer(input.damagedQuantity,'จำนวนเสียหาย');
+            if(safe(input.restockQuantity+input.damagedQuantity)!==input.quantity)error('INVALID_RETURN_LINE','จำนวนขายต่อได้รวมกับเสียหายต้องเท่าจำนวนคืน');
+            if(input.quantity>original.remainingQuantity)error('RETURN_QUANTITY_EXCEEDED','จำนวนคืนมากกว่าที่บิลยังคืนได้');
+            return {id:uuid(),returnId:id,saleLineId:original.id,productId:original.productId,name:original.name,sku:original.sku,
+              unitPrice:original.unitPrice,quantity:input.quantity,restockQuantity:input.restockQuantity,damagedQuantity:input.damagedQuantity,
+              total:safe(input.quantity*original.unitPrice)};
+          });
+          const total=lines.reduce((sum,line)=>safe(sum+line.total),0);
+          const entry={id,returnNo:'RT1-'+id.replace(/-/g,''),saleId:source.sale.id,receiptNo:source.sale.receiptNo,shiftId:shift.id,
+            createdAt:now(),userId,reason,total,lines};
+          s.returns.push(entry);
+          s.cashRefunds.push({id:uuid(),returnId:id,shiftId:shift.id,amount:total,confirmedBy:userId,createdAt:entry.createdAt});
+          lines.filter(line=>line.restockQuantity>0).forEach(line=>{
+            const product=s.products.find(p=>p.id===line.productId);
+            if(!product)error('PRODUCT_NOT_FOUND','ไม่พบสินค้าต้นทาง');
+            movement(s,product,'return_restock',line.restockQuantity,'คืนสินค้า '+entry.returnNo,userId,line.id);
+          });
+          summary(s,shift.id);
+          audit(s,'RETURN_CREATED','คืน '+entry.returnNo+' จาก '+source.sale.receiptNo+' · '+reason,userId);
+          if(simulation==='unresolved')s.pendingReturn={...clone(requestArgs),returnId:id};
+          return entry;
+        },true);
+        return simulation==='unresolved'?{return:result,unresolved:true}:{return:result};
+      },
+      recoverReturn() {
+        if(!state.pendingReturn)return null;
+        const entry=state.returns.find(item=>item.id===state.pendingReturn.returnId);
+        if(!entry)error('RECOVERY_FAILED','ยังไม่พบผลรายการคืนเดิม กรุณาตรวจข้อมูลก่อนจ่ายเงินซ้ำ');
+        return transaction(s=>{s.pendingReturn=null;return entry;});
       },
       saveProduct(input,userId) {
         const actor=user(state,userId,true);
@@ -254,6 +345,7 @@
         if(!sale)error('SALE_NOT_FOUND','ไม่พบบิล');
         if(sale.shiftId!==shift.id)error('WRONG_SHIFT','ยกเลิกได้เฉพาะบิลในกะเดิมที่ยังเปิดอยู่');
         if(sale.voidedAt)error('ALREADY_VOIDED','บิลนี้ยกเลิกแล้ว ไม่มีการคืนเงินหรือสต๊อกซ้ำ');
+        if(s.returns.some(entry=>entry.saleId===sale.id))error('VOID_BLOCKED_BY_RETURN','บิลนี้มีรายการคืนแล้ว ยกเลิกทั้งบิลไม่ได้');
         const reason=text(args.reason,'เหตุผลยกเลิก');
         if(args.cashReturned!==true||args.goodsReturned!==true)error('RETURN_CONFIRMATION_REQUIRED','กรุณายืนยันคืนเงินครบและรับสินค้าคืนครบ');
         sale.voidedAt=now();sale.voidReason=reason;sale.voidedBy=userId;
@@ -267,6 +359,7 @@
       }); },
       closeShift(args) { return request('closeShift',args,(s,userId)=>{
         if(s.pendingCheckout)error('CHECKOUT_UNRESOLVED','กรุณากู้ผลการขายเดิมก่อนปิดกะ');
+        if(s.pendingReturn)error('RETURN_UNRESOLVED','กรุณากู้ผลรายการคืนเดิมก่อนปิดกะ');
         const shift=open(s);const counted=integer(args.counted,'เงินนับจริง');
         const snapshot=summary(s,shift.id);snapshot.counted=counted;snapshot.difference=safe(counted-snapshot.expected);
         Object.assign(shift,{closedAt:now(),closedBy:userId,counted,expected:snapshot.expected,difference:snapshot.difference,summary:snapshot});
@@ -284,10 +377,11 @@
         const calendarDate=new Date(day+'T00:00:00+07:00');
         if(Number.isNaN(calendarDate.getTime())||dateKey(calendarDate)!==day)error('INVALID_DATE','วันที่ไม่ถูกต้อง');
         const sales=state.sales.filter(s=>dateKey(s.createdAt)===day);
-        const result={opening:0,...totals(sales),cashIn:0,cashOut:0,counted:null,difference:null};
+        const result={opening:0,...totals(sales),refunds:0,returnCount:0,cashIn:0,cashOut:0,counted:null,difference:null};
         // A void belongs to the calendar day it was recorded, including shifts crossing midnight.
         result.voids=state.sales.filter(s=>s.voidedAt&&dateKey(s.voidedAt)===day).reduce((sum,s)=>safe(sum+s.total),0);
-        result.net=safe(result.gross-result.voids);
+        state.cashRefunds.filter(refund=>dateKey(refund.createdAt)===day).forEach(refund=>{result.refunds=safe(result.refunds+refund.amount);result.returnCount++;});
+        result.net=safe(safe(result.gross-result.voids)-result.refunds);
         state.shifts.filter(s=>dateKey(s.openedAt)===day).forEach(s=>{result.opening=safe(result.opening+s.opening);});
         state.cashMovements.filter(m=>dateKey(m.createdAt)===day).forEach(m=>{const f=m.kind==='in'?'cashIn':'cashOut';result[f]=safe(result[f]+m.amount);});
         const closed=state.shifts.filter(s=>s.closedAt&&dateKey(s.closedAt)===day);

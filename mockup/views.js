@@ -50,13 +50,13 @@
   const heading = (title,description,action='') => `<div class="page-heading"><div><h1>${h(title)}</h1><p>${h(description)}</p></div><div class="page-actions">${action}</div></div>`;
   const categories = ['ทั้งหมด','เครื่องดื่ม','อาหารแห้ง','ขนมและเบเกอรี่','ของใช้','วัตถุดิบ'];
   const nav = [
-    {id:'sales',label:'ขายสินค้า',icon:'bag'}, {id:'history',label:'ประวัติการขาย',icon:'receipt'}, {id:'inventory',label:'สินค้าและสต๊อก',icon:'box',owner:true},
+    {id:'sales',label:'ขายสินค้า',icon:'bag'}, {id:'history',label:'ประวัติการขาย',icon:'receipt'}, {id:'returns',label:'คืนสินค้า',icon:'refresh',owner:true}, {id:'inventory',label:'สินค้าและสต๊อก',icon:'box',owner:true},
     {id:'shifts',label:'กะและเงินสด',icon:'clock'}, {id:'reports',label:'รายงานการขาย',icon:'chart'}, {id:'users',label:'ผู้ใช้งาน',icon:'users',owner:true}, {id:'system',label:'ระบบและข้อมูล',icon:'server',owner:true}
   ];
   function shell(page,ctx) {
     const {state,user}=ctx;
     const navigation = group => nav.filter(n=>group.includes(n.id)&&(!n.owner||user.role==='owner')).map(n=>`<a class="nav-item ${page===n.id?'active':''}" href="#${n.id}" aria-label="${n.label}" ${page===n.id?'aria-current="page"':''}>${icon(n.icon)}<span>${n.label}</span></a>`).join('');
-    return `<div class="app-shell"><aside class="sidebar" aria-label="เมนูหลัก"><a class="brand" href="#sales" aria-label="บ้านดี POS หน้าขาย"><span class="brand-mark">${icon('shop')}</span><div><div class="brand-name">บ้านดี<span>POS</span></div><div class="brand-caption">เพื่อนคู่ร้าน ในทุกวัน</div></div></a><div class="nav-label">หน้าร้าน</div><nav class="nav-group">${navigation(['sales','history','inventory'])}</nav><div class="nav-label">จัดการร้าน</div><nav class="nav-group">${navigation(['shifts','reports','users','system'])}</nav><div class="sidebar-bottom"><div class="local-status"><span class="status-dot"></span><div><strong>พร้อมใช้งานในร้าน</strong>ขายเงินสดได้แม้อินเทอร์เน็ตขัดข้อง</div></div><div class="sidebar-footer">บ้านดี POS <span>v0.1 · ตัวอย่าง</span></div></div></aside><div class="mobile-overlay" data-action="menu"></div><main class="main-shell"><header class="topbar"><div class="topbar-store"><button class="mobile-menu" data-action="menu" aria-label="เปิดเมนู">${icon('menu')}</button><span class="store-icon">${icon('shop')}</span><div>ร้านบ้านดี มินิมาร์ท<small>สาขาหลัก · เครื่องขาย 01</small></div></div><div class="topbar-right"><span class="demo-tag">ข้อมูลตัวอย่าง</span><button class="online-badge ${state.online?'':'offline'}" data-action="network" title="สลับสถานะเครือข่ายตัวอย่าง"><span class="status-dot"></span>${state.online?'ออนไลน์':'ออฟไลน์ · ขายต่อได้'}</button><div class="topbar-divider"></div><button class="profile-button" data-action="profile" aria-label="เปลี่ยนผู้ใช้งานตัวอย่าง"><span class="avatar">${h(user.name.slice(0,1))}</span><span class="profile-copy"><strong>${h(user.name)}</strong><small>${user.role==='owner'?'เจ้าของร้าน':'พนักงานขาย'}</small></span>${icon('chevron')}</button></div></header><div id="page-content" class="workspace">${pages[page](ctx)}</div></main></div>`;
+    return `<div class="app-shell"><aside class="sidebar" aria-label="เมนูหลัก"><a class="brand" href="#sales" aria-label="บ้านดี POS หน้าขาย"><span class="brand-mark">${icon('shop')}</span><div><div class="brand-name">บ้านดี<span>POS</span></div><div class="brand-caption">เพื่อนคู่ร้าน ในทุกวัน</div></div></a><div class="nav-label">หน้าร้าน</div><nav class="nav-group">${navigation(['sales','history','returns','inventory'])}</nav><div class="nav-label">จัดการร้าน</div><nav class="nav-group">${navigation(['shifts','reports','users','system'])}</nav><div class="sidebar-bottom"><div class="local-status"><span class="status-dot"></span><div><strong>พร้อมใช้งานในร้าน</strong>ขายเงินสดได้แม้อินเทอร์เน็ตขัดข้อง</div></div><div class="sidebar-footer">บ้านดี POS <span>v0.1 · ตัวอย่าง</span></div></div></aside><div class="mobile-overlay" data-action="menu"></div><main class="main-shell"><header class="topbar"><div class="topbar-store"><button class="mobile-menu" data-action="menu" aria-label="เปิดเมนู">${icon('menu')}</button><span class="store-icon">${icon('shop')}</span><div>ร้านบ้านดี มินิมาร์ท<small>สาขาหลัก · เครื่องขาย 01</small></div></div><div class="topbar-right"><span class="demo-tag">ข้อมูลตัวอย่าง</span><button class="online-badge ${state.online?'':'offline'}" data-action="network" title="สลับสถานะเครือข่ายตัวอย่าง"><span class="status-dot"></span>${state.online?'ออนไลน์':'ออฟไลน์ · ขายต่อได้'}</button><div class="topbar-divider"></div><button class="profile-button" data-action="profile" aria-label="เปลี่ยนผู้ใช้งานตัวอย่าง"><span class="avatar">${h(user.name.slice(0,1))}</span><span class="profile-copy"><strong>${h(user.name)}</strong><small>${user.role==='owner'?'เจ้าของร้าน':'พนักงานขาย'}</small></span>${icon('chevron')}</button></div></header><div id="page-content" class="workspace">${pages[page](ctx)}</div></main></div>`;
   }
   function sales(ctx) {
     const {state,cart,category,query,catalogPage}=ctx;
@@ -90,6 +90,22 @@
     const sales=state.sales.filter(s=>(!historyDate||dayKey(s.createdAt)===historyDate)&&(!historyQuery||[s.receiptNo,actor(state,s.userId)].some(v=>v.toLowerCase().includes(historyQuery.toLowerCase())))&&(historyStatus==='all'||(historyStatus==='void'?!!s.voidedAt:!s.voidedAt))).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
     return heading('ประวัติการขาย','ทุกบิลมีที่มา เปิดดูหรือพิมพ์ใบเสร็จซ้ำได้')+`<div class="panel"><div class="toolbar"><div class="search-box">${icon('search')}<input id="history-search" type="search" value="${h(historyQuery)}" placeholder="ค้นหาเลขบิลหรือชื่อพนักงาน" aria-label="ค้นหาประวัติการขาย"></div><input id="history-date" type="date" value="${h(historyDate)}" aria-label="วันที่ขาย"><select id="history-status" aria-label="สถานะบิล"><option value="all" ${historyStatus==='all'?'selected':''}>ทุกสถานะ</option><option value="confirmed" ${historyStatus==='confirmed'?'selected':''}>สำเร็จ</option><option value="void" ${historyStatus==='void'?'selected':''}>ยกเลิก</option></select><button class="button small" data-action="history-all">ทุกวัน</button></div>${sales.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>เลขบิล</th><th>วันและเวลา</th><th>พนักงาน</th><th class="right">ยอดบิล</th><th>สถานะ</th><th></th></tr></thead><tbody>${sales.map(s=>`<tr class="row-link" data-action="receipt" data-id="${h(s.id)}"><td><strong>${shortBill(s)}</strong><small class="muted" style="display:block;margin-top:5px">${s.items.reduce((n,i)=>n+i.quantity,0)} ชิ้น · ${s.items.length} รายการ</small></td><td class="muted">${date(s.createdAt,true)}</td><td>${h(actor(state,s.userId))}</td><td class="right num">${money(s.total)}</td><td>${badge(s.voidedAt?'ยกเลิก':'สำเร็จ',s.voidedAt?'red':'green')}</td><td class="right"><button class="icon-button" data-action="receipt" data-id="${h(s.id)}" aria-label="เปิดบิล ${shortBill(s)}">${icon('chevronRight')}</button></td></tr>`).join('')}</tbody></table></div><div class="table-count">${sales.length} บิล · ยอดสุทธิ ${money(sales.filter(s=>!s.voidedAt).reduce((n,s)=>n+s.total,0))}</div>`:empty('ยังไม่มีบิลในช่วงนี้','เลือกวันที่อื่น หรือเริ่มขายสินค้าที่หน้าขาย','receipt')}</div>`;
   }
+  function returns(ctx) {
+    const {state,store,returnQuery}=ctx;
+    const q=(returnQuery||'').trim().toLowerCase();
+    const current=shift(state);
+    const bills=state.sales.filter(s=>!q||s.receiptNo.toLowerCase().includes(q)||shortBill(s).toLowerCase().includes(q))
+      .slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+    const records=state.returns.slice().reverse();
+    return heading('คืนสินค้าและคืนเงินสด','เลือกบิลเดิม คืนตามราคาที่ขายจริง และบันทึกสภาพสินค้า',current?badge('กะจ่ายเงินเปิดอยู่'):badge('กรุณาเปิดกะก่อนคืนเงิน','orange'))
+      +`${state.pendingReturn?`<div class="pending-warning">รายการคืนก่อนหน้ายังไม่ทราบผล กรุณาตรวจรายการเดิมก่อนจ่ายเงินหรือเริ่มคืนใหม่ <button class="plain-button" data-action="return-recover">ตรวจสอบรายการเดิม</button></div>`:ctx.returnDraft?.saleId?`<div class="pending-warning">มีร่างรายการคืนที่ยังไม่ยืนยัน <button class="plain-button" data-action="return-resume">ทำรายการเดิมต่อ</button></div>`:''}`
+      +`<section class="panel"><div class="section-heading"><h2>ค้นบิลต้นทาง</h2><span class="muted">${bills.length} บิล</span></div><div class="search-box return-search">${icon('search')}<input id="return-search" type="search" value="${h(returnQuery||'')}" placeholder="ค้นหาเลขบิล POS1-…" aria-label="ค้นหาเลขบิลสำหรับคืนสินค้า"></div><div class="table-wrap"><table class="data-table"><thead><tr><th>เลขบิล / วันขาย</th><th class="right">ยอดบิล</th><th>สถานะคืน</th><th class="right">คืนแล้ว</th><th class="right">รายการ</th></tr></thead><tbody>${bills.map(s=>{
+        const info=store.getReturnable(s.id);
+        const status=s.voidedAt?badge('ยกเลิก','red'):badge(info.status==='full'?'คืนครบ':info.status==='partial'?'คืนบางส่วน':'ยังไม่คืน',info.status==='none'?'gray':'blue');
+        return `<tr><td><strong>${shortBill(s)}</strong><small class="muted" style="display:block">${date(s.createdAt,true)}</small><span class="return-mobile-actions"><button class="button small" data-action="return-open" data-id="${h(s.id)}" ${s.voidedAt||info.status==='full'||!current||state.pendingReturn?'disabled':''}>รับคืน</button><button class="plain-button" data-action="receipt" data-id="${h(s.id)}">ดูบิล</button></span></td><td class="right num">${money(s.total)}</td><td>${status}</td><td class="right num">${money(info.refunded)}</td><td class="right"><button class="button small" data-action="return-open" data-id="${h(s.id)}" ${s.voidedAt||info.status==='full'||!current||state.pendingReturn?'disabled':''}>รับคืน</button><button class="icon-button" data-action="receipt" data-id="${h(s.id)}" aria-label="ดูบิล ${shortBill(s)}">${icon('chevronRight')}</button></td></tr>`;
+      }).join('')}</tbody></table></div>${!bills.length?empty('ไม่พบบิล','ลองค้นเลขบิลอื่น','receipt'):''}</section>`
+      +`<section class="panel mt-20"><div class="section-heading"><h2>เอกสารคืนสินค้า</h2><span class="muted">${records.length} รายการ</span></div>${records.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>เลขเอกสาร / เวลาคืน</th><th>บิลต้นทาง</th><th>กะที่จ่าย</th><th class="right">ยอดคืน</th><th class="right">ดูเอกสาร</th></tr></thead><tbody>${records.map(r=>`<tr><td><strong>${h(r.returnNo)}</strong><small class="muted" style="display:block">${date(r.createdAt,true)}</small></td><td>${h(r.receiptNo)}</td><td class="muted">${date(state.shifts.find(s=>s.id===r.shiftId)?.openedAt,true)}</td><td class="right num text-red">− ${money(r.total)}</td><td class="right"><button class="icon-button" data-action="return-document" data-id="${h(r.id)}" aria-label="ดูเอกสารคืน ${h(r.returnNo)}">${icon('chevronRight')}</button></td></tr>`).join('')}</tbody></table></div>`:empty('ยังไม่มีรายการคืน','เมื่อรับคืนสินค้า เอกสารจะปรากฏที่นี่','refresh')}</section>`;
+  }
   function shifts(ctx) {
     const {state,store,user}=ctx;const current=shift(state);const summary=current?store.shiftSummary(current.id):null;
     const movements=state.cashMovements.filter(m=>m.shiftId===current?.id).slice().reverse();
@@ -105,6 +121,10 @@
       if(sale.voidedAt&&(selectedShift?inShift:dayKey(sale.voidedAt)===selectedDate))
         events.push({sale,kind:'void',createdAt:sale.voidedAt,amount:-sale.total,userId:sale.voidedBy||sale.userId});
     }
+    for(const record of state.returns||[]) {
+      if(selectedShift?record.shiftId===selectedShift:dayKey(record.createdAt)===selectedDate)
+        events.push({sale:state.sales.find(s=>s.id===record.saleId),return:record,kind:'return',createdAt:record.createdAt,amount:-record.total,userId:record.userId});
+    }
     return events.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   }
   function reports(ctx) {
@@ -116,9 +136,9 @@
     const bins=Array.from({length:12},(_,i)=>({hour:i*2,value:saleEvents.filter(event=>Math.floor(hour(event.createdAt)/2)===i).reduce((sum,event)=>sum+event.amount,0)}));
     const max=Math.max(100,...bins.map(bin=>bin.value));
     const byProduct=new Map();
-    for(const event of events) for(const item of event.sale.items) {
+    for(const event of events) for(const item of (event.kind==='return'?event.return.lines:event.sale.items)) {
       const row=byProduct.get(item.productId)||{name:item.name,quantity:0};
-      row.quantity+=(event.kind==='void'?-1:1)*item.quantity;
+      row.quantity+=(event.kind==='sale'?1:-1)*item.quantity;
       byProduct.set(item.productId,row);
     }
     const top=Array.from(byProduct.values()).filter(item=>item.quantity!==0).sort((a,b)=>b.quantity-a.quantity).slice(0,5);
@@ -128,11 +148,12 @@
     }).join('');
     const rows=events.map(event=>{
       const {sale,kind}=event;
+      if(kind==='return') return `<tr><td>${h(event.return.returnNo)}</td><td class="muted">${date(event.createdAt,true)}</td><td>${h(actor(state,event.userId))}</td><td>${badge('คืนสินค้า','blue')}<small class="muted" style="display:block">${shortBill(sale)}</small></td><td class="right num text-red">−${money(event.return.total)}</td><td class="right"><button class="icon-button" data-action="return-document" data-id="${h(event.return.id)}" aria-label="เปิดเอกสารคืน ${h(event.return.returnNo)}">${icon('chevronRight')}</button></td></tr>`;
       return `<tr><td>${shortBill(sale)}</td><td class="muted">${date(event.createdAt,true)}</td><td>${h(actor(state,event.userId))}</td><td>${badge(kind==='void'?'ยกเลิกบิล':'ขาย',kind==='void'?'red':'green')}</td><td class="right num ${kind==='void'?'text-red':''}">${kind==='void'?'-':''}${money(sale.total)}</td><td class="right"><button class="icon-button" data-action="receipt" data-id="${h(sale.id)}" aria-label="เปิดบิล ${shortBill(sale)}">${icon('chevronRight')}</button></td></tr>`;
     }).join('');
     return heading('รายงานการขาย','มองเห็นภาพรวม และตรวจกลับถึงแต่ละรายการได้',`<button class="button" data-action="export-report">${icon('download')}ส่งออกรายงาน</button>`)
       +`<div class="toolbar"><input id="report-date" type="date" value="${h(reportDate)}" aria-label="วันที่รายงาน"><select id="report-shift" aria-label="รายงานตามกะ"><option value="">รายงานตามวัน</option>${state.shifts.map(s=>`<option value="${h(s.id)}" ${reportShift===s.id?'selected':''}>กะ ${date(s.openedAt,true)}${s.closedAt?' · ปิดแล้ว':''}</option>`).join('')}</select><span class="muted" style="font-size:11px">เวลาประเทศไทย (Asia/Bangkok)</span></div>`
-      +`<div class="metric-grid"><div class="metric-card"><div class="metric-label">${icon('receipt')}ยอดขายก่อนหักยกเลิก</div><div class="metric-value num">${money(summary.gross)}</div><div class="metric-foot">${summary.saleCount} บิลในช่วงที่เลือก</div></div><div class="metric-card"><div class="metric-label">${icon('history')}ยอดยกเลิก</div><div class="metric-value num text-amber">${money(summary.voids)}</div><div class="metric-foot">ยกเลิกทั้งบิลเท่านั้น</div></div><div class="metric-card"><div class="metric-label">${icon('chart')}ยอดขายสุทธิ</div><div class="metric-value num text-green">${money(summary.net)}</div><div class="metric-foot">ยอดขายทั้งหมด หักยอดยกเลิก</div></div></div>`
+       +`<div class="metric-grid four"><div class="metric-card"><div class="metric-label">${icon('receipt')}ยอดขายก่อนหักยกเลิก</div><div class="metric-value num">${money(summary.gross)}</div><div class="metric-foot">${summary.saleCount} บิลในช่วงที่เลือก</div></div><div class="metric-card"><div class="metric-label">${icon('history')}ยอดยกเลิก</div><div class="metric-value num text-amber">${money(summary.voids)}</div><div class="metric-foot">ยกเลิกทั้งบิลเท่านั้น</div></div><div class="metric-card"><div class="metric-label">${icon('refresh')}ยอดคืนสินค้า</div><div class="metric-value num text-red">${money(summary.refunds||0)}</div><div class="metric-foot">${summary.returnCount||0} เอกสารคืนในช่วงที่เลือก</div></div><div class="metric-card"><div class="metric-label">${icon('chart')}ยอดขายสุทธิ</div><div class="metric-value num text-green">${money(summary.net)}</div><div class="metric-foot">ยอดขาย − ยกเลิก − คืนสินค้า</div></div></div>`
       +`<div class="content-grid"><section class="panel"><div class="section-heading"><div><h2>ยอดขายตามช่วงเวลา</h2><p>${reportShift?'ตามกะที่เลือก':date(reportDate+'T12:00:00+07:00')}</p></div>${icon('chart')}</div><div class="report-chart" role="img" aria-label="ยอดขายก่อนหักยกเลิก ช่วงละ 2 ชั่วโมง ${bins.map(b=>String(b.hour).padStart(2,'0')+':00 '+money(b.value)).join(', ')}">${chart}</div><div class="chart-legend"><i></i>ยอดขายก่อนหักยกเลิก (บาท) · ช่วงละ 2 ชั่วโมง</div></section><section class="panel"><div class="section-heading"><h2>สินค้าในช่วงที่เลือก</h2><span class="muted" style="font-size:11px">จำนวนสุทธิหลังยกเลิก</span></div>${top.length?top.map((p,i)=>`<div class="stat-line"><span>${i+1}. ${h(p.name)}</span><strong class="num">${p.quantity} ชิ้น</strong></div>`).join(''):empty('ยังไม่มีข้อมูลขาย','เริ่มขายสินค้าเพื่อดูรายงาน','chart')}</section></div>`
       +`<section class="panel mt-20"><div class="section-heading"><h2>รายการในรายงาน</h2><span class="muted" style="font-size:11px">แตะบิลเพื่อดูรายละเอียดต้นทาง</span></div>${events.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>เลขบิล</th><th>เวลา</th><th>ผู้ทำรายการ</th><th>รายการ</th><th class="right">ยอดเงิน</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:empty('ไม่มีรายการในช่วงที่เลือก','ลองเปลี่ยนวันที่หรือกะที่ต้องการดู','receipt')}</section>`;
   }
@@ -148,6 +169,38 @@
   function receipt(sale,state) {
     return `<div class="receipt-paper"><div class="receipt-brand"><h3>บ้านดี มินิมาร์ท</h3><p>สาขาหลัก · เครื่องขาย 01<br>ใบเสร็จรับเงิน</p><div class="receipt-id">${h(sale.receiptNo)}</div></div><div class="receipt-meta"><span>${date(sale.createdAt,true)}</span><span>ผู้ขาย ${h(actor(state,sale.userId))}</span></div>${sale.voidedAt?`<div class="receipt-void">ยกเลิกบิลแล้ว · ${date(sale.voidedAt,true)}<br>เหตุผล: ${h(sale.voidReason||'ยกเลิกทั้งบิล')}</div>`:''}<table class="receipt-lines"><tbody>${sale.items.map(i=>`<tr><td>${h(i.name)}<br><small>${i.quantity} × ${money(i.unitPrice)}</small></td><td class="num">${money(i.total)}</td></tr>`).join('')}</tbody></table><div class="receipt-totals"><div class="stat-line total"><span>ยอดรวม</span><strong class="num">${money(sale.total)}</strong></div><div class="stat-line"><span>รับเงินสด</span><strong class="num">${money(sale.tendered)}</strong></div><div class="stat-line"><span>เงินทอน</span><strong class="num">${money(sale.change)}</strong></div></div><div class="receipt-thanks">ขอบคุณที่อุดหนุน แล้วแวะมาอีกนะคะ</div></div>`;
   }
-  const pages={sales,inventory,history,shifts,reports,users,system};
-  window.POSViews={shell,pages,receipt,reportEvents,h,icon,money,number,date,time,dayKey,image,shortBill,badge,empty,actor,shift,categories};
+  function returnDocument(record,state) {
+    const sale=state.sales.find(s=>s.id===record.saleId);
+    return `<div class="receipt-paper"><div class="receipt-brand"><h3>บ้านดี มินิมาร์ท</h3><p>เอกสารรับคืนสินค้า / คืนเงินสด</p><div class="receipt-id">${h(record.returnNo)}</div></div><div class="receipt-meta"><span>${date(record.createdAt,true)}</span><span>เจ้าของร้าน ${h(actor(state,record.userId))}</span></div><div class="receipt-void">บิลต้นทาง ${h(sale?.receiptNo||record.receiptNo)} · ขาย ${date(sale?.createdAt,true)}<br>เหตุผล: ${h(record.reason)}</div><table class="receipt-lines"><tbody>${record.lines.map(line=>`<tr><td>${h(line.name)}<br><small>${line.quantity} × ${money(line.unitPrice)} · ขายต่อได้ ${line.restockQuantity} · เสียหาย ${line.damagedQuantity}</small></td><td class="num">${money(line.total)}</td></tr>`).join('')}</tbody></table><div class="receipt-totals"><div class="stat-line total"><span>คืนเงินสดแล้ว</span><strong class="num">${money(record.total)}</strong></div><div class="stat-line"><span>กะที่จ่าย</span><strong>${date(state.shifts.find(s=>s.id===record.shiftId)?.openedAt,true)}</strong></div></div></div>`;
+  }
+  function historyWithReturns(ctx) {
+    let base=history(ctx);
+    const relevant=ctx.state.sales.filter(s=>ctx.state.returns.some(r=>r.saleId===s.id)
+      &&(!ctx.historyDate||dayKey(s.createdAt)===ctx.historyDate)
+      &&(!ctx.historyQuery||s.receiptNo.toLowerCase().includes(ctx.historyQuery.toLowerCase())));
+    const details=relevant.map(s=>{
+      const info=ctx.store.getReturnable(s.id);
+      const marker=`<tr class="row-link" data-action="receipt" data-id="${h(s.id)}">`;
+      const start=base.indexOf(marker);
+      if(start>=0){const end=base.indexOf('</tr>',start)+5;const row=base.slice(start,end);
+        base=base.slice(0,start)+row.replace(badge('สำเร็จ','green'),badge(info.status==='full'?'คืนครบ':'คืนบางส่วน','blue')+`<small class="muted" style="display:block">คืนแล้ว ${money(info.refunded)}</small>`)+base.slice(end);}
+      return `<div class="stat-line"><span>${shortBill(s)} · ${info.status==='full'?'คืนครบ':'คืนบางส่วน'} · คืนแล้ว ${money(info.refunded)}</span><span>${info.returns.map(r=>`<button class="plain-button" data-action="return-document" data-id="${h(r.id)}">${h(r.returnNo)}</button>`).join(' ')}</span></div>`;
+    }).join('');
+    return base.replace(/<\/div>$/,`</div>${details?`<section class="panel mt-20"><div class="section-heading"><h2>การคืนสินค้าของบิลในรายการ</h2></div>${details}</section>`:''}`)
+      .replace(/ยอดสุทธิ/, 'ยอดบิลหลัง void (ก่อนหักคืน)');
+  }
+  function shiftsWithReturns(ctx) {
+    const current=shift(ctx.state);
+    const currentSummary=current?ctx.store.shiftSummary(current.id):null;
+    const closed=ctx.state.shifts.filter(s=>s.closedAt).slice().reverse();
+    let base=shifts(ctx);
+    if(currentSummary)base=base.replace('<div class="stat-line"><span>เงินนำเข้า',`<div class="stat-line"><span>ยอดคืนสินค้า (${currentSummary.returnCount} เอกสาร)</span><strong class="num text-red">− ${money(currentSummary.refunds)}</strong></div><div class="stat-line"><span>เงินนำเข้า`);
+    const detail=closed.length?`<section class="panel mt-20"><div class="section-heading"><h2>ยอดคืนเงินสดในกะที่ปิดแล้ว</h2></div>${closed.map(s=>{const sum=ctx.store.shiftSummary(s.id);return `<div class="stat-line"><span>กะปิด ${date(s.closedAt,true)} · ${sum.returnCount||0} เอกสารคืน</span><strong class="num text-red">− ${money(sum.refunds||0)}</strong></div>`}).join('')}<p class="muted">ยอดคืนหักในเงินสดที่ควรมีของกะที่จ่ายเงิน และไม่รวมในเงินนำออก</p></section>`:'';
+    return base+detail;
+  }
+  function reportsWithReturns(ctx) {
+    return reports(ctx).replace('จำนวนสุทธิหลังยกเลิก','จำนวนสุทธิหลังยกเลิกและคืนสินค้า');
+  }
+  const pages={sales,inventory,history:historyWithReturns,returns,shifts:shiftsWithReturns,reports:reportsWithReturns,users,system};
+  window.POSViews={shell,pages,receipt,returnDocument,reportEvents,h,icon,money,number,date,time,dayKey,image,shortBill,badge,empty,actor,shift,categories};
 })();

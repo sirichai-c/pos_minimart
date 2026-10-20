@@ -14,7 +14,7 @@
 
 - Thai interface, THB displayed to two decimals, business dates in Asia/Bangkok.
 - Money calculations use integer satang; quantities are whole units; stock cannot be negative.
-- Cash only. No discounts, separate taxes, membership, QR/card, profit/cost or partial returns.
+- Cash only. No discounts, separate taxes, membership, QR/card or profit/cost. Partial returns are covered by the later returns module below.
 - All assets are local; the browser app does not require a CDN or installation.
 - Keep original bills, stock movements, cash movements and audits; closed-shift results are snapshots.
 - Do not stage, commit, publish or change existing branches as part of this task.
@@ -66,3 +66,7 @@ Files: `index.html`, `styles.css`, `views.js`, `app.js`, `README.md`.
 ## Execution notes
 
 Ruling: implement in the explicitly requested `mockup/` folder on the current checkout and leave existing staged IDE files alone. The user's requested artifact is a local UI mockup, so backend guarantees are documented rather than simulated as production claims.
+
+## Returns/refunds extension (21 October 2026)
+
+The later [returns/refunds spec](../plan/pos-returns-refunds-spec.md) supersedes the original exclusion of partial returns. The mockup now has sale-line IDs, append-only return documents, a separate cash refund ledger, owner-only partial/full returns, restock/damaged quantities, return recovery, and Bangkok day/current shift reporting. State version 1 migrates in place to version 2 while retaining existing sales and request history. `returns.test.cjs` checks migration, price snapshots, multiple returns, permissions, idempotency, void exclusion, cross-shift totals, and failure rollback. Production API/SQLite work remains in [production-readiness.md](../plan/production-readiness.md), milestone M4R.

@@ -4,6 +4,7 @@
   const app = document.getElementById('app');
   const dialog = document.getElementById('app-dialog');
   const draftKey = 'baandee-pos-draft-v1';
+  const returnDraftKey = 'baandee-pos-return-draft-v1';
   const dataKey = 'baandee-pos-demo-v1';
   const uuid = () => globalThis.crypto?.randomUUID?.() || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16)});
   let store;
@@ -21,9 +22,11 @@
     else {cart=initialState.products.filter(p=>p.active&&p.stock>1).slice(0,2).map((p,i)=>({productId:p.id,quantity:i+1,unitPrice:p.price}));window.localStorage.setItem(draftKey,JSON.stringify({items:cart,key:null}));}
   } catch (_) {cart=[];requestKey=null;}
   let page='sales';
-  let category='ทั้งหมด',query='',catalogPage=0,inventoryQuery='',historyQuery='',historyDate=V.dayKey(),historyStatus='all',reportDate=V.dayKey(),reportShift='';
+  let category='ทั้งหมด',query='',catalogPage=0,inventoryQuery='',historyQuery='',historyDate=V.dayKey(),historyStatus='all',reportDate=V.dayKey(),reportShift='',returnQuery='';
+  let returnDraft=null;
+  try { returnDraft=JSON.parse(window.localStorage.getItem(returnDraftKey)||'null'); } catch (_) { returnDraft=null; }
   let scenario='none',busy=false,toastTimer=null,lastFocus=null;
-  function getContext(){const state=store.getState();return{state,user:state.users.find(u=>u.id===state.currentUserId),store,cart,category,query,catalogPage,inventoryQuery,historyQuery,historyDate,historyStatus,reportDate,reportShift,scenario};}
+  function getContext(){const state=store.getState();return{state,user:state.users.find(u=>u.id===state.currentUserId),store,cart,category,query,catalogPage,inventoryQuery,historyQuery,historyDate,historyStatus,reportDate,reportShift,returnQuery,returnDraft,scenario};}
   function render(){
     const focus=document.activeElement;
     const focusId=focus?.id;
@@ -32,10 +35,10 @@
     if(focusId&&focus instanceof HTMLInputElement){try{selection=[focus.selectionStart,focus.selectionEnd]}catch(_){}}
     const ctx=getContext();
     if(!ctx.user){throw new Error('ไม่พบผู้ใช้งานตัวอย่าง');}
-    if(ctx.user.role!=='owner'&&['inventory','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
+    if(ctx.user.role!=='owner'&&['inventory','returns','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
     app.innerHTML=V.shell(page,ctx);
     document.getElementById('page-content').tabIndex=-1;
-    document.title='บ้านดี POS · '+({sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',shifts:'กะและเงินสด',reports:'รายงานการขาย',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
+    document.title='บ้านดี POS · '+({sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
     if(focusId){const next=document.getElementById(focusId);if(next){next.focus({preventScroll:true});if(selection&&selection[0]!=null){try{next.setSelectionRange(...selection)}catch(_){}}}}
     else if(focusData){
       const candidates=app.querySelectorAll(focusData.href?'a[href]':'[data-action]');
@@ -46,6 +49,15 @@
   }
   function toast(message,error=false){const region=document.getElementById('toast-region');clearTimeout(toastTimer);region.innerHTML=`<div class="toast ${error?'error':''}">${V.icon(error?'alert':'check')}<span>${V.h(message)}</span></div>`;toastTimer=setTimeout(()=>{region.innerHTML=''},4200);}
   function saveDraft(items,key=null){window.localStorage.setItem(draftKey,JSON.stringify({items,key}));cart=items;requestKey=key;}
+  function saveReturnDraft(payload) {
+    const previous=returnDraft;
+    const comparable=value=>JSON.stringify({userId:value.userId,saleId:value.saleId,lines:value.lines,reason:value.reason,cashPaidConfirmed:value.cashPaidConfirmed});
+    const next={...payload,key:previous&&comparable(previous)===comparable(payload)?previous.key:uuid()};
+    window.localStorage.setItem(returnDraftKey,JSON.stringify(next));
+    returnDraft=next;
+    return next;
+  }
+  function clearReturnDraft(){window.localStorage.removeItem(returnDraftKey);returnDraft=null;}
   function cartTotal(){return cart.reduce((sum,i)=>sum+i.unitPrice*i.quantity,0);}
   function ensureCartEditable(){if(store.getPendingCheckout())throw new Error('กรุณาตรวจสอบผลรายการเดิมก่อนแก้ไขตะกร้า');}
   function addProduct(id){
@@ -81,10 +93,50 @@
   function updateChange(){const input=document.getElementById('cash-tendered');if(!input)return;let amount=-1;try{amount=POSData.parseMoney(input.value)}catch(_){}const total=cartTotal();document.getElementById('change-value').textContent=V.money(Math.max(0,amount-total));document.getElementById('dialog-submit').disabled=busy||amount<total;}
   function receipt(id,success=false){
     const state=store.getState();const sale=state.sales.find(s=>s.id===id);if(!sale)throw new Error('ไม่พบบิลที่ต้องการ');
-    const canVoid=getContext().user.role==='owner'&&!sale.voidedAt&&V.shift(state)?.id===sale.shiftId;
+    const info=store.getReturnable(sale.id);
+    const canVoid=getContext().user.role==='owner'&&!sale.voidedAt&&!info.returns.length&&V.shift(state)?.id===sale.shiftId;
+    const canReturn=getContext().user.role==='owner'&&!sale.voidedAt&&info.status!=='full'&&!!V.shift(state)&&!state.pendingReturn;
     const successHtml=success?`<div class="receipt-success"><span class="success-mark">${V.icon('check')}</span><h3>ขายสำเร็จแล้ว</h3><p>รับเงิน ${V.money(sale.tendered)} · ทอน ${V.money(sale.change)}</p></div>`:'';
-    showDialog(success?'เรียบร้อย พร้อมบิลต่อไป':'รายละเอียดบิล',success?'บันทึกยอดขายและอัปเดตสต๊อกแล้ว':V.shortBill(sale),successHtml+V.receipt(sale,state),`${canVoid?`<button type="button" class="button danger" data-action="void" data-id="${V.h(sale.id)}">ยกเลิกบิล</button>`:''}<button type="button" class="button" data-action="print" data-id="${V.h(sale.id)}">${V.icon('printer')}พิมพ์ใบเสร็จ</button><button type="button" class="button primary" data-action="dialog-close">${success?'ขายบิลถัดไป':'ปิด'}</button>`);
+    showDialog(success?'เรียบร้อย พร้อมบิลต่อไป':'รายละเอียดบิล',success?'บันทึกยอดขายและอัปเดตสต๊อกแล้ว':V.shortBill(sale),successHtml+V.receipt(sale,state)+`<div class="return-recap"><strong>สถานะคืน: ${info.status==='full'?'คืนครบ':info.status==='partial'?'คืนบางส่วน':'ยังไม่คืน'}</strong><span>คืนแล้ว ${V.money(info.refunded)}</span>${info.returns.map(r=>`<button type="button" class="plain-button" data-action="return-document" data-id="${V.h(r.id)}">${V.h(r.returnNo)}</button>`).join('')}</div>`,`${canVoid?`<button type="button" class="button danger" data-action="void" data-id="${V.h(sale.id)}">ยกเลิกบิล</button>`:''}${canReturn?`<button type="button" class="button" data-action="return-open" data-id="${V.h(sale.id)}">รับคืนสินค้า</button>`:''}<button type="button" class="button" data-action="print" data-id="${V.h(sale.id)}">${V.icon('printer')}พิมพ์ใบเสร็จ</button><button type="button" class="button primary" data-action="dialog-close">${success?'ขายบิลถัดไป':'ปิด'}</button>`);
   }
+  function returnPayload(form) {
+    const data=new FormData(form);
+    const saleId=String(data.get('saleId')||'');
+    const source=store.getReturnable(saleId);
+    const lines=source.lines.map((line,index)=>({saleLineId:line.id,quantity:Number(data.get('quantity-'+index)||0),restockQuantity:Number(data.get('restock-'+index)||0),damagedQuantity:Number(data.get('damaged-'+index)||0)})).filter(line=>line.quantity||line.restockQuantity||line.damagedQuantity);
+    return {saleId,userId:store.getState().currentUserId,lines,reason:String(data.get('reason')||''),cashPaidConfirmed:data.has('cashPaidConfirmed')};
+  }
+  function updateReturnPreview(form) {
+    const source=store.getReturnable(form.elements.saleId.value);
+    const payload=returnPayload(form);
+    const total=payload.lines.reduce((sum,line)=>sum+line.quantity*(source.lines.find(item=>item.id===line.saleLineId)?.unitPrice||0),0);
+    const shift=V.shift(store.getState());
+    const expected=shift?store.shiftSummary(shift.id).expected-total:null;
+    form.querySelector('#return-total').textContent=V.money(total);
+    form.querySelector('#return-expected').textContent=expected===null?'—':V.money(expected);
+  }
+  function returnForm(id) {
+    const state=store.getState();
+    if(state.pendingReturn){showDialog('ตรวจสอบรายการคืนเดิม','ยังไม่ทราบผลการบันทึกครั้งก่อน','<div class="inline-info">ตรวจรายการเดิมก่อนจ่ายเงินหรือบันทึกรายการใหม่</div>','<button type="button" class="button primary" data-action="return-recover">ตรวจสอบรายการเดิม</button>');return;}
+    if(!V.shift(state))throw new Error('กรุณาเปิดกะก่อนคืนเงิน');
+    const info=store.getReturnable(id);
+    if(info.sale.voidedAt||info.status==='full')throw new Error('บิลนี้คืนสินค้าไม่ได้');
+    const draft=returnDraft?.saleId===id?returnDraft:null;
+    const rows=info.lines.map((line,index)=>{
+      if(line.remainingQuantity===0)return '';
+      const saved=draft?.lines.find(item=>item.saleLineId===line.id);
+      return `<div class="return-line"><div class="return-line-title"><strong>${V.h(line.name)}</strong><span>${V.money(line.unitPrice)} / ชิ้น</span></div><small>${V.h(line.sku)} · ซื้อ ${line.quantity} · คืนแล้ว ${line.returnedQuantity} · คืนได้ ${line.remainingQuantity}</small><input type="hidden" name="saleLineId-${index}" value="${V.h(line.id)}"><div class="return-quantities">${field('รับคืน','quantity-'+index,saved?.quantity||0,'number',`class="return-input" min="0" max="${line.remainingQuantity}" step="1" required`)}${field('ขายต่อได้','restock-'+index,saved?.restockQuantity||0,'number','class="return-input" min="0" step="1" required')}${field('เสียหาย','damaged-'+index,saved?.damagedQuantity||0,'number','class="return-input" min="0" step="1" required')}</div></div>`;
+    }).join('');
+    const body=`<input type="hidden" name="saleId" value="${V.h(id)}"><div class="inline-info">บิล ${V.h(info.sale.receiptNo)} · ขาย ${V.date(info.sale.createdAt,true)}<br>ยอดคืนสะสม ${V.money(info.refunded)} · คืนได้ตามรายการด้านล่าง</div>${rows}<label class="field"><span>เหตุผลที่คืนสินค้า</span><textarea name="reason" required maxlength="300" placeholder="ระบุเหตุผลให้ตรวจย้อนหลังได้">${V.h(draft?.reason||'')}</textarea></label><div class="payment-total"><span>เงินสดที่จะคืน</span><strong id="return-total">${V.money(0)}</strong></div><div class="change-preview"><span>เงินสดคาดหวังหลังกำหนดคืน</span><strong id="return-expected">—</strong></div><p class="muted">ตรวจธนบัตรในลิ้นชักจริงก่อนจ่าย หากไม่พอ ให้บันทึกเงินนำเข้าตามเหตุการณ์จริง</p><label class="checkbox-field"><input type="checkbox" name="cashPaidConfirmed" required ${draft?.cashPaidConfirmed?'checked':''}><span>จ่ายเงินสดให้ลูกค้าตามยอดที่แสดงแล้ว</span></label><label class="field"><span>ลองสถานการณ์ (mockup)</span><select name="simulate"><option value="none">บันทึกตามปกติ</option><option value="unresolved">บันทึกแล้ว แต่ผลตอบกลับหาย</option><option value="failure">จำลองบันทึกไม่สำเร็จ</option></select></label>`;
+    showDialog('รับคืนสินค้า',V.shortBill(info.sale)+' · กะจ่ายเงิน '+V.date(V.shift(state).openedAt,true),body,cancelButton+submitButton('ยืนยันคืนเงินสด','refresh'),'return');
+    updateReturnPreview(dialog.querySelector('form'));
+  }
+  function returnDocument(id) {
+    const state=store.getState();const record=state.returns.find(r=>r.id===id);
+    if(!record)throw new Error('ไม่พบเอกสารคืนสินค้า');
+    showDialog('เอกสารคืนสินค้า',record.returnNo,V.returnDocument(record,state),`<button type="button" class="button" data-action="return-print" data-id="${V.h(id)}">${V.icon('printer')}พิมพ์ซ้ำ</button><button type="button" class="button primary" data-action="dialog-close">ปิด</button>`);
+  }
+  function recoverReturn(){const record=store.recoverReturn();if(!record){toast('ไม่พบรายการคืนที่ต้องตรวจสอบ');render();return;}clearReturnDraft();render();returnDocument(record.id);toast('พบเอกสารคืนเดิมแล้ว ไม่มีการคืนเงินซ้ำ');}
   function priceChanged(){
     const state=store.getState();const changed=cart.filter(i=>state.products.find(p=>p.id===i.productId)?.price!==i.unitPrice);
     showDialog('ราคาสินค้ามีการเปลี่ยนแปลง','ยังไม่มีการขาย กรุณาตรวจราคาใหม่ก่อนยืนยัน',`<div class="stat-list">${changed.map(i=>{const p=state.products.find(p=>p.id===i.productId);return `<div class="stat-line"><span>${V.h(p?.name||'สินค้า')}</span><strong>${V.money(i.unitPrice)} → ${V.money(p?.price||0)}</strong></div>`}).join('')}</div>`,cancelButton+'<button type="button" class="button primary" data-action="accept-prices">ใช้ราคาล่าสุด</button>');
@@ -101,14 +153,14 @@
   function cashMovement(kind){if(!V.shift(store.getState()))throw new Error('เปิดกะก่อนบันทึกเงินเข้า–ออก');showDialog(kind==='in'?'นำเงินเข้าลิ้นชัก':'นำเงินออกจากลิ้นชัก','รายการนี้จะเปลี่ยนยอดเงินสดในกะ แต่ไม่เปลี่ยนยอดขาย',`<input type="hidden" name="kind" value="${kind}"><div class="form-grid">${field('จำนวนเงิน (บาท)','amount','','number','required min="0.01" step="0.01" inputmode="decimal"',true)}<label class="field full"><span>เหตุผล</span><textarea name="reason" required maxlength="300" placeholder="เช่น เพิ่มเงินทอน หรือนำเงินเก็บเข้าตู้เซฟ"></textarea></label></div>`,cancelButton+submitButton('บันทึกรายการ','cash'),'cash');}
   function voidForm(id){const state=store.getState();const sale=state.sales.find(s=>s.id===id);if(!sale)return;showDialog('ยกเลิกทั้งบิล',`${V.shortBill(sale)} · ยอด ${V.money(sale.total)}`,`<input type="hidden" name="saleId" value="${V.h(id)}"><div class="inline-info">การยกเลิกจะคืนยอดสินค้าและกลับยอดเงินสดในข้อมูล กรุณาคืนเงินและตรวจสินค้าจริงให้ครบก่อนยืนยัน</div><label class="field"><span>เหตุผลที่ยกเลิกบิล</span><textarea name="reason" required maxlength="300" placeholder="ระบุเหตุผลให้ตรวจย้อนหลังได้"></textarea></label><label class="checkbox-field"><input type="checkbox" name="cashReturned" required><span>คืนเงินสดครบ ${V.money(sale.total)} ให้ลูกค้าแล้ว</span></label><label class="checkbox-field"><input type="checkbox" name="goodsReturned" required><span>ได้รับสินค้ากลับมาครบในสภาพจำหน่ายได้ หรือยังไม่ได้ส่งมอบสินค้า</span></label>`,cancelButton+'<button type="submit" class="button danger" id="dialog-submit">ยืนยันยกเลิกทั้งบิล</button>','void');}
   function userForm(id){const u=store.getState().users.find(u=>u.id===id);showDialog(u?'แก้ไขพนักงาน':'เพิ่มพนักงานขาย','พนักงานขายมีสิทธิ์เปิด–ปิดกะ ขายสินค้า และดูบิล',`<input type="hidden" name="id" value="${V.h(u?.id||'')}"><div class="form-grid">${field('ชื่อที่แสดง','name',u?.name||'','text','required maxlength="60"',true)}${field('ชื่อบัญชี','username',u?.username||'','text','required pattern="[A-Za-z0-9_.-]+" maxlength="40" placeholder="เช่น cashier02"',true)}<label class="field full"><span>สถานะบัญชี</span><select name="active"><option value="true" ${!u||u.active?'selected':''}>เปิดใช้งาน</option><option value="false" ${u&&!u.active?'selected':''}>ปิดบัญชี</option></select></label></div><div class="subtle-note">${V.icon('info')}บัญชีใน mockup ใช้สลับบทบาทสำหรับทดลอง ไม่มีการเก็บรหัสผ่านจริง</div>`,cancelButton+submitButton('บันทึกพนักงาน'),'user');}
-  function profile(){const state=store.getState();if(state.pendingCheckout)throw new Error('ตรวจสอบรายการที่ยังไม่ทราบผลก่อนเปลี่ยนผู้ใช้งาน');showDialog('เลือกผู้ใช้งานตัวอย่าง','ลองมุมมองเจ้าของร้านและพนักงานขาย',`<div class="role-selection">${state.users.filter(u=>u.active).map(u=>`<button type="button" class="role-option ${u.id===state.currentUserId?'active':''}" data-action="switch-user" data-id="${V.h(u.id)}"><span class="avatar">${V.h(u.name.slice(0,1))}</span><span class="role-text"><strong>${V.h(u.name)}</strong><small>${u.role==='owner'?'เจ้าของร้าน · จัดการได้ทุกส่วน':'พนักงานขาย · ขายสินค้าและจัดการกะ'}</small></span>${u.id===state.currentUserId?V.icon('check'):V.icon('chevronRight')}</button>`).join('')}</div>`);}
+  function profile(){const state=store.getState();if(state.pendingCheckout||state.pendingReturn)throw new Error('ตรวจสอบรายการที่ยังไม่ทราบผลก่อนเปลี่ยนผู้ใช้งาน');showDialog('เลือกผู้ใช้งานตัวอย่าง','ลองมุมมองเจ้าของร้านและพนักงานขาย',`<div class="role-selection">${state.users.filter(u=>u.active).map(u=>`<button type="button" class="role-option ${u.id===state.currentUserId?'active':''}" data-action="switch-user" data-id="${V.h(u.id)}"><span class="avatar">${V.h(u.name.slice(0,1))}</span><span class="role-text"><strong>${V.h(u.name)}</strong><small>${u.role==='owner'?'เจ้าของร้าน · จัดการได้ทุกส่วน':'พนักงานขาย · ขายสินค้าและจัดการกะ'}</small></span>${u.id===state.currentUserId?V.icon('check'):V.icon('chevronRight')}</button>`).join('')}</div>`);}
   function confirmDialog(title,subtitle,action,label='ยืนยัน'){showDialog(title,'',`<p class="dialog-subtext">${V.h(subtitle)}</p>`,cancelButton+`<button type="button" class="button primary" data-action="${action}">${V.h(label)}</button>`);}
   function download(filename,text,type){const blob=new Blob([text],{type});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function exportReport(){
     const state=store.getState();
     const events=V.reportEvents(state,reportDate,reportShift);
     const cell=v=>{const value=String(v);return '"'+(/^-?\d+(?:\.\d+)?$/.test(value)?value:value.replace(/^[=+\-@]/,"'$&")).replace(/"/g,'""')+'"';};
-    const rows=[['เลขบิล','เวลา','ผู้ทำรายการ','รายการ','ยอดบาท'],...events.map(e=>[e.sale.receiptNo,V.date(e.createdAt,true),V.actor(state,e.userId),e.kind==='void'?'ยกเลิกบิล':'ขาย',(e.kind==='void'?'-':'')+POSData.money(e.sale.total)])];
+    const rows=[['เลขเอกสาร','เวลา','ผู้ทำรายการ','รายการ','ยอดบาท'],...events.map(e=>[e.kind==='return'?e.return.returnNo:e.sale.receiptNo,V.date(e.createdAt,true),V.actor(state,e.userId),e.kind==='return'?'คืนสินค้า':e.kind==='void'?'ยกเลิกบิล':'ขาย',POSData.money(e.amount)])];
     download(`baandee-report-${reportShift||reportDate}.csv`,'\ufeff'+rows.map(row=>row.map(cell).join(',')).join('\r\n'),'text/csv;charset=utf-8');
     toast('ส่งออกรายงานแล้ว');
   }
@@ -127,6 +179,11 @@
     'accept-prices':()=>{const state=store.getState();saveDraft(cart.map(i=>({...i,unitPrice:state.products.find(p=>p.id===i.productId)?.price??i.unitPrice})));render();openCheckout();},
     'new-product':()=>productForm(), 'edit-product':el=>productForm(el.dataset.id), stock:el=>stockForm(el.dataset.id), 'stock-history':el=>stockHistory(el.dataset.id),
     receipt:el=>receipt(el.dataset.id),void:el=>voidForm(el.dataset.id),
+    'return-open':el=>returnForm(el.dataset.id),
+    'return-document':el=>returnDocument(el.dataset.id),
+    'return-recover':recoverReturn,
+    'return-resume':()=>{if(returnDraft?.saleId)returnForm(returnDraft.saleId);},
+    'return-print':el=>{const state=store.getState();const record=state.returns.find(r=>r.id===el.dataset.id);if(!record)return;document.getElementById('print-area').innerHTML=V.returnDocument(record,state);window.print();},
     print:el=>{const state=store.getState();const sale=state.sales.find(s=>s.id===el.dataset.id);if(!sale)return;document.getElementById('print-area').innerHTML=V.receipt(sale,state);window.print();},
     'history-all':()=>{historyDate='';render();},
     'open-shift':openShift,'close-shift':closeShift,'cash-movement':el=>cashMovement(el.dataset.kind),
@@ -137,7 +194,7 @@
     'export-data':()=>{download(`baandee-demo-${V.dayKey()}.json`,JSON.stringify(store.getState(),null,2),'application/json');toast('ส่งออกข้อมูลตัวอย่างแล้ว');},
     'restore-info':()=>showDialog('การกู้คืนข้อมูล','ขั้นตอนสำหรับเจ้าของร้านและผู้ดูแล',`<div class="dialog-subtext"><p>ในระบบจริงต้องหยุดขายและเข้าสู่ <strong>โหมดบำรุงรักษา</strong> ก่อนกู้คืน</p><ol><li>เก็บสำเนาข้อมูลเดิม และเลือก backup ที่ตรวจสอบได้</li><li>ตรวจ checksum และเวอร์ชันข้อมูล แล้วกู้ลงตำแหน่งสะอาด</li><li>ตรวจจำนวนบิล ยอดเงิน กะ และข้อมูลล่าสุดให้ตรงกับจุดสำรอง</li><li>ล็อกอินใหม่ กระทบยอดเงินจริง แล้วจึงกลับมาขาย</li></ol><p>mockup นี้ไม่มีฐานข้อมูล SQLite หรือการกู้คืนข้อมูลร้านจริง ปุ่มส่งออกเก็บเฉพาะข้อมูลตัวอย่างจากเบราว์เซอร์</p></div>`,'<button type="button" class="button primary" data-action="dialog-close">เข้าใจแล้ว</button>'),
     'reset-demo':()=>confirmDialog('เริ่มข้อมูลตัวอย่างใหม่?','รายการที่คุณลองขาย ปรับสต๊อก และจัดการกะใน mockup จะถูกแทนที่ด้วยข้อมูลเริ่มต้น','confirm-reset','เริ่มใหม่'),
-    'confirm-reset':()=>{store.reset();saveDraft([]);scenario='none';category='ทั้งหมด';query='';catalogPage=0;reportShift='';closeDialog();render();toast('เริ่มข้อมูลตัวอย่างใหม่แล้ว');},
+    'confirm-reset':()=>{store.reset();saveDraft([]);clearReturnDraft();scenario='none';category='ทั้งหมด';query='';catalogPage=0;reportShift='';closeDialog();render();toast('เริ่มข้อมูลตัวอย่างใหม่แล้ว');},
     'export-report':exportReport,
     'dialog-close':closeDialog
   };
@@ -147,10 +204,12 @@
     if(el.id==='product-search'){query=el.value;catalogPage=0;render();}
     else if(el.id==='inventory-search'){inventoryQuery=el.value;render();}
     else if(el.id==='history-search'){historyQuery=el.value;render();}
+    else if(el.id==='return-search'){returnQuery=el.value;render();}
+    else if(el.closest('form[data-form="return"]')){const form=el.closest('form');saveReturnDraft(returnPayload(form));updateReturnPreview(form);}
     else if(el.id==='cash-tendered')updateChange();
     else if(el.id==='counted-cash'){let value;try{value=POSData.parseMoney(el.value)}catch(_){value=null}const current=V.shift(store.getState());const diff=value===null?null:value-store.shiftSummary(current.id).expected;const output=document.getElementById('cash-difference');output.textContent=diff===null?'—':(diff>0?'+':'')+V.money(diff);output.className=diff<0?'text-red':diff>0?'text-amber':'text-green';}
   });
-  document.addEventListener('change',event=>{const el=event.target;if(el.id==='history-date'){historyDate=el.value;render();}else if(el.id==='history-status'){historyStatus=el.value;render();}else if(el.id==='report-date'){if(!el.value){el.value=reportDate;toast('กรุณาเลือกวันที่สำหรับรายงาน',true);return;}reportDate=el.value;reportShift='';render();}else if(el.id==='report-shift'){reportShift=el.value;render();}else if(el.id==='checkout-scenario'){scenario=el.value;toast('ตั้งค่าสถานการณ์ตัวอย่างแล้ว');}});
+  document.addEventListener('change',event=>{const el=event.target;if(el.id==='history-date'){historyDate=el.value;render();}else if(el.id==='history-status'){historyStatus=el.value;render();}else if(el.id==='report-date'){if(!el.value){el.value=reportDate;toast('กรุณาเลือกวันที่สำหรับรายงาน',true);return;}reportDate=el.value;reportShift='';render();}else if(el.id==='report-shift'){reportShift=el.value;render();}else if(el.id==='checkout-scenario'){scenario=el.value;toast('ตั้งค่าสถานการณ์ตัวอย่างแล้ว');}else if(el.closest('form[data-form="return"]')){const form=el.closest('form');saveReturnDraft(returnPayload(form));updateReturnPreview(form);}});
   document.addEventListener('keydown',event=>{
     if(event.key==='F2'&&!dialog.open){event.preventDefault();if(page!=='sales'){location.hash='sales';setTimeout(()=>document.getElementById('product-search')?.focus(),0)}else document.getElementById('product-search')?.focus();}
     if(event.key==='F8'&&!dialog.open){event.preventDefault();try{openCheckout()}catch(error){toast(error.message,true)}}
@@ -188,12 +247,22 @@
         case 'close-shift':{const closed=store.closeShift({key:uuid(),counted:POSData.parseMoney(value('counted')),userId:user.id});closeDialog();render();toast('ปิดกะและบันทึกยอดนับจริงแล้ว');break;}
         case 'cash':store.addCashMovement({key:uuid(),kind:value('kind'),amount:POSData.parseMoney(value('amount')),reason:value('reason'),userId:user.id});closeDialog();render();toast('บันทึกเงิน'+(value('kind')==='in'?'นำเข้า':'นำออก')+'แล้ว');break;
         case 'void':{const id=value('saleId');store.voidSale({key:uuid(),saleId:id,reason:value('reason'),cashReturned:data.has('cashReturned'),goodsReturned:data.has('goodsReturned'),userId:user.id});closeDialog();render();receipt(id);toast('ยกเลิกบิลและคืนยอดสินค้าแล้ว');break;}
+        case 'return':{
+          const payload=saveReturnDraft(returnPayload(form));
+          busy=true;const button=document.getElementById('dialog-submit');button.disabled=true;button.innerHTML='<span class="loading-spinner"></span>กำลังบันทึก…';
+          await new Promise(resolve=>setTimeout(resolve,350));
+          const result=store.createReturn({...payload,simulate:value('simulate')});
+          busy=false;
+          if(result.unresolved){closeDialog();render();showDialog('ยังไม่ทราบผลรายการคืน','อย่าจ่ายเงินซ้ำ ตรวจด้วยคำขอเดิมก่อนทำรายการใหม่','<div class="inline-info">ระบบบันทึกรายการแล้ว แต่จำลองว่าผลตอบกลับหาย กดตรวจสอบเพื่อเปิดเอกสารเดิม</div>','<button type="button" class="button primary" data-action="return-recover">ตรวจสอบรายการเดิม</button>');}
+          else{clearReturnDraft();closeDialog();render();returnDocument(result.return.id);}
+          return;
+        }
         case 'user':{const id=value('id');store.saveUser({...(id?{id}:{}),name:value('name'),username:value('username'),role:'cashier',active:value('active')==='true'},user.id);closeDialog();render();toast('บันทึกพนักงานแล้ว');break;}
       }
-    }catch(error){busy=false;if(error.code==='PRICE_CHANGED'){priceChanged();return;}showError(error);const button=document.getElementById('dialog-submit');if(button&&form.dataset.form==='checkout'){button.disabled=false;button.innerHTML=V.icon('check')+'ยืนยันการขาย';updateChange();}}
+    }catch(error){busy=false;if(error.code==='PRICE_CHANGED'){priceChanged();return;}showError(error);const button=document.getElementById('dialog-submit');if(button&&form.dataset.form==='checkout'){button.disabled=false;button.innerHTML=V.icon('check')+'ยืนยันการขาย';updateChange();}else if(button&&form.dataset.form==='return'){button.disabled=false;button.innerHTML=V.icon('refresh')+'ยืนยันคืนเงินสด';}}
   });
   document.querySelector('.skip-link')?.addEventListener('click',event=>{event.preventDefault();document.getElementById('page-content')?.focus({preventScroll:false});});
-  function navigate(){const next=location.hash.slice(1);if(next==='page-content'){document.getElementById('page-content')?.focus();return;}page=Object.hasOwn(V.pages,next)?next:'sales';render();window.scrollTo({top:0});}
+  function navigate(){const next=location.hash.slice(1);if(next==='page-content'){document.getElementById('page-content')?.focus();return;}page=Object.hasOwn(V.pages,next)?next:store.getPendingReturn()?'returns':'sales';render();window.scrollTo({top:0});}
   window.addEventListener('hashchange',navigate);
   window.addEventListener('storage',event=>{if(event.key===dataKey)toast('ข้อมูลเปลี่ยนจากอีกแท็บ กรุณารีเฟรชก่อนทำรายการต่อ',true);});
   navigate();

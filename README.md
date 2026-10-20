@@ -12,24 +12,25 @@ py -m http.server 4173 --bind 127.0.0.1 --directory mockup
 
 แล้วเปิด [http://127.0.0.1:4173/](http://127.0.0.1:4173/) ใน Chrome หรือ Edge กด `Ctrl+C` ในหน้าต่าง PowerShell เพื่อหยุดเซิร์ฟเวอร์ หรือเปิด `mockup/index.html` โดยตรงได้
 
-หน้าเว็บมีข้อมูลตัวอย่างสำหรับลองขายเงินสด ออกใบเสร็จ จัดการสินค้าและสต๊อก ยกเลิกบิล เปิด–ปิดกะ ดูรายงาน และสลับบทบาทเจ้าของร้านกับพนักงานขาย รายละเอียดวิธีลองใช้อยู่ใน [คู่มือ mockup](mockup/README.md)
+หน้าเว็บมีข้อมูลตัวอย่างสำหรับลองขายเงินสด ออกใบเสร็จ คืนสินค้าและคืนเงินสดบางส่วนหรือทั้งบิล จัดการสินค้าและสต๊อก ยกเลิกบิล เปิด–ปิดกะ ดูรายงาน และสลับบทบาทเจ้าของร้านกับพนักงานขาย รายละเอียดวิธีลองใช้อยู่ใน [คู่มือ mockup](mockup/README.md)
 
 ## ไฟล์สำคัญ
 
 | ตำแหน่ง | เนื้อหา |
 | --- | --- |
 | [plan/pos-mvp-spec.md](plan/pos-mvp-spec.md) | เป้าหมาย ขอบเขต กติกาธุรกิจ สถาปัตยกรรมที่เสนอ และเกณฑ์รับงาน |
+| [plan/pos-returns-refunds-spec.md](plan/pos-returns-refunds-spec.md) | กติกาคืนสินค้าและคืนเงินสด รวมเกณฑ์รับงานของโมดูลนี้ |
 | [plan/production-readiness.md](plan/production-readiness.md) | งานที่ยังต้องทำและเกณฑ์ตรวจรับก่อนใช้ POS ขายจริง |
 | [mockup/index.html](mockup/index.html) | หน้าเว็บตัวอย่างภาษาไทย เปิดได้โดยไม่ติดตั้งแพ็กเกจ |
 | [mockup/README.md](mockup/README.md) | วิธีใช้หน้าจอ ปุ่มลัด และขอบเขตของตัวอย่าง |
-| [mockup/store.test.cjs](mockup/store.test.cjs) และ [mockup/views.test.cjs](mockup/views.test.cjs) | ชุดทดสอบกติกาข้อมูลและรายงาน |
+| [mockup/store.test.cjs](mockup/store.test.cjs), [mockup/returns.test.cjs](mockup/returns.test.cjs) และ [mockup/views.test.cjs](mockup/views.test.cjs) | ชุดทดสอบกติกาข้อมูล คืนสินค้า และรายงาน |
 
 ## ตรวจสอบ
 
 ต้องมี Node.js สำหรับรันชุดทดสอบ จากโฟลเดอร์โปรเจกต์:
 
 ```powershell
-node --test --test-isolation=none mockup/store.test.cjs mockup/views.test.cjs
+node --test --test-isolation=none mockup/store.test.cjs mockup/returns.test.cjs mockup/views.test.cjs
 ```
 
 หน้าเว็บตัวอย่างเก็บข้อมูลใน `localStorage` ของเบราว์เซอร์ สามารถเริ่มข้อมูลตัวอย่างใหม่ได้จากหน้า **ระบบและข้อมูล** ข้อมูลของ URL แบบ `file://` กับ `http://127.0.0.1` แยกจากกัน

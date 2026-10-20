@@ -13,3 +13,21 @@ dialog{border:1px solid #e2e9e3;border-radius:17px;padding:0;max-height:calc(100
 @media(max-width:390px){.report-chart .chart-column:nth-child(even) small{visibility:hidden}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 @media print{body{background:#fff;color:#000;font-family:Tahoma,sans-serif}.app-shell,dialog,#toast-region,.skip-link{display:none!important}#print-area{display:block!important;width:76mm;margin:0 auto}.receipt-paper{border:0;padding:5mm 0}.receipt-paper *{color:#000!important}.receipt-brand{border-color:#333}.receipt-id{font-size:8px}.receipt-lines{font-size:11px}.receipt-thanks{border-color:#333}.receipt-totals .stat-line.total strong{font-size:20px}@page{margin:8mm}}
+.return-search{margin:16px 0 20px;max-width:500px}
+.metric-grid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.return-line{padding:16px 0;border-bottom:1px solid var(--line)}
+.return-line:first-of-type{border-top:1px solid var(--line)}
+.return-line-title{display:flex;justify-content:space-between;gap:12px;font-size:12px}
+.return-line-title span{color:var(--green);white-space:nowrap;font-variant-numeric:tabular-nums}
+.return-line>small{display:block;color:var(--muted);margin:6px 0 12px}
+.return-quantities{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.return-quantities .field{font-size:11px}
+.return-quantities input{text-align:center;font-variant-numeric:tabular-nums}
+.return-line+.field,.return-line~.field{margin-top:18px}
+.return-recap{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 0;font-size:11px;color:var(--muted)}
+.return-recap strong{color:var(--green)}
+.return-recap .plain-button{font-size:10px}
+.return-mobile-actions{display:none}
+@media(max-width:760px){.metric-grid.four{grid-template-columns:repeat(2,minmax(0,1fr))}.metric-grid.four .metric-card:last-child{grid-column:auto}}
+@media(max-width:650px){.return-mobile-actions{display:flex;align-items:center;gap:8px;margin-top:9px}.return-mobile-actions .button{padding:6px 10px;font-size:10px}.return-search+.table-wrap td:first-child{min-width:140px}}
+@media(max-width:390px){.return-quantities{gap:6px}.return-quantities input{padding:9px 4px}}
