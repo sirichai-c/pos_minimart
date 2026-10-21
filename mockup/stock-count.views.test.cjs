@@ -1,15 +1,15 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const POSData=require('./store.js');
+const POSData=require('./assets/js/store.js');
 function fixture(){const data=new Map(),store=POSData.createStore({storage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)}});
  const context={window:{},POSData,Intl,Date,Number,Map,Math};
- for(const file of ['views.js','stock-count-ui.js'])vm.runInNewContext(fs.readFileSync(path.join(__dirname,file),'utf8'),context);
+ for(const file of ['views.js','stock-count-ui.js'])vm.runInNewContext(fs.readFileSync(path.join(__dirname,'assets','js',file),'utf8'),context);
  return {store,V:context.window.POSViews,UI:context.window.POSStockCountUI};}
 const a=(key,x={})=>({key,userId:'owner',...x});
 test('count page renders owner create control, cashier navigation, and distinct zero/uncounted values',()=>{
  const {store,V,UI}=fixture();const c=store.createStockCount(a('new',{name:'รอบเช้า',productIds:['water','milk']}));
  store.recordStockCount(a('line',{countId:c.id,productId:'water',countedQty:0,varianceReason:'หมด'}));
  let state=store.getState(),ctx={store,state,user:state.users[0]};
- const page=UI.page(ctx,c.id,'');assert.match(page,/รอบเช้า/);assert.match(page,/ยังไม่ได้นับ/);assert.match(page,/นับแล้ว 1/);
+ const page=UI.page(ctx,c.id,''),visibleText=page.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');assert.match(page,/รอบเช้า/);assert.match(page,/ยังไม่ได้นับ/);assert.match(visibleText,/นับแล้ว 1 \/ 2 SKU/);
  assert.match(page,/sc-create/);assert.match(page,/sc-submit/);assert.doesNotMatch(page,/฿/);
  ctx.user=state.users[1];assert.doesNotMatch(UI.page(ctx,c.id,''),/sc-create|sc-approve|sc-cancel/);
  assert.match(V.shell('stock-count',ctx),/href="#stock-count"/);
@@ -44,6 +44,6 @@ test('barcode search matches snapshot and module scripts are loaded in order',()
  const html=UI.page({store,state,user:state.users[0]},c.id,'8851000000028');
  assert.match(html,/WATER-600/);assert.doesNotMatch(html,/MILK-250/);
  const index=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
- assert.ok(index.indexOf('src="stock-count.js"')<index.indexOf('src="store.js"'));
- assert.ok(index.indexOf('src="stock-count-ui.js"')<index.indexOf('src="app.js"'));
+ assert.ok(index.indexOf('src="assets/js/stock-count.js"')<index.indexOf('src="assets/js/store.js"'));
+ assert.ok(index.indexOf('src="assets/js/stock-count-ui.js')<index.indexOf('src="assets/js/app.js"'));
 });

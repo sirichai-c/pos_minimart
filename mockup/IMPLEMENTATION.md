@@ -28,7 +28,7 @@
 
 ## Task 1: Data model and rules
 
-Files: `store.js`, `store.test.cjs`.
+Files: `assets/js/store.js`, `store.test.cjs`.
 
 Expose `POSData.createStore({storage,key})` in the browser and a CommonJS export for tests. Public API: `getState`, `setUser`, `saveProduct`, `adjustStock`, `checkout`, `recoverCheckout`, `getPendingCheckout`, `voidSale`, `openShift`, `closeShift`, `addCashMovement`, `shiftSummary`, `dailySummary`, `saveUser`, `recordBackup`, `setOnline`, `reset`. Export `parseMoney` and `money` helpers.
 
@@ -48,7 +48,7 @@ Image keys: milk, water, coffee, tea, soda, noodles, rice, oil, fish, bread, sna
 
 ## Task 3: App and UI integration
 
-Files: `index.html`, `styles.css`, `views.js`, `app.js`, `README.md`.
+Files: `index.html`, `assets/css/styles.css`, `assets/js/views.js`, `assets/js/app.js`, `README.md`.
 
 - [x] Build sale, inventory, history, shifts, reports, users and system screens with keyboard-accessible navigation.
 - [x] Implement cart/search/categories, checkout and receipt/print, recovery state, product edits, stock receipt/count, bill void, cash movements, opening/closing shifts, report filters, role switching and backup/audit demo.

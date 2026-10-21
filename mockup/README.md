@@ -6,6 +6,8 @@
 
 เปิด `index.html` ด้วย Chrome หรือ Edge ได้โดยตรง ไม่ต้องติดตั้งแพ็กเกจและไม่ใช้ CDN หรืออินเทอร์เน็ต
 
+ไฟล์หน้าเว็บอยู่ใน `index.html`; สไตล์อยู่ใน `assets/css/`, โค้ด JavaScript อยู่ใน `assets/js/` และภาพสินค้าอยู่ใน `assets/products/` ส่วนไฟล์ `*.test.cjs` อยู่ที่ราก `mockup/`
+
 หากต้องการเปิดผ่าน local server จากโฟลเดอร์โปรเจกต์:
 
 ```powershell
@@ -83,9 +85,9 @@ py -m http.server 4173 --bind 127.0.0.1 --directory mockup
 
 ```powershell
 node --test --test-isolation=none mockup/store.test.cjs mockup/returns.test.cjs mockup/views.test.cjs mockup/purchasing.test.cjs mockup/purchasing.views.test.cjs mockup/stock-count.test.cjs mockup/stock-count.views.test.cjs mockup/gross-profit.test.cjs mockup/orders.test.cjs mockup/orders.views.test.cjs mockup/loyalty.test.cjs mockup/loyalty.views.test.cjs
-node --check mockup/store.js
-node --check mockup/views.js
-node --check mockup/app.js
+node --check mockup/assets/js/store.js
+node --check mockup/assets/js/views.js
+node --check mockup/assets/js/app.js
 ```
 
 ใช้ `--test-isolation=none` เมื่อ environment ไม่อนุญาตให้ test runner สร้าง process ย่อย

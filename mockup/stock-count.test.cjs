@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {createStore} = require('./store.js');
+const {createStore} = require('./assets/js/store.js');
 function memory(){ const data=new Map();return {fail:false,getItem:k=>data.get(k)??null,setItem(k,v){if(this.fail)throw Error('disk full');data.set(k,v);}}; }
 function fixture(){const storage=memory(),store=createStore({storage,key:'test'});return {store,storage};}
 const stock=(s,id='water')=>s.getState().products.find(p=>p.id===id);

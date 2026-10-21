@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {createStore} = require('./store.js');
+const {createStore} = require('./assets/js/store.js');
 function fixture(){const data=new Map(),storage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)},store=createStore({storage});return {store,storage};}
 let n=0; const key=()=>`gp-${++n}`;
 const fail=(fn,code)=>assert.throws(fn,e=>e.code===code);

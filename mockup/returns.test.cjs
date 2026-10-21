@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createStore } = require('./store.js');
+const { createStore } = require('./assets/js/store.js');
 
 function memory() {
   const data = new Map();

@@ -1,0 +1,20 @@
+.ord-overview h2,.ord-list-toolbar h2{font-size:15px;line-height:1.4}
+.ord-status-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;margin:12px 0 0;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:var(--line)}
+.ord-status{min-width:0;padding:13px 14px;background:#fff}
+.ord-status dt{color:var(--muted);font-size:11px;line-height:1.4}
+.ord-status dd{margin:5px 0 0;color:var(--ink);font-size:21px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
+.ord-status[data-status=reserved] dd,.ord-status[data-status=ready] dd{color:var(--green)}
+.ord-reservation-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) auto;align-items:center;gap:14px;margin-top:14px;padding:14px 18px;border:1px solid #d7e9dd;border-radius:10px;background:var(--green-soft)}
+.ord-reservation-summary div{display:flex;min-width:0;flex-direction:column;gap:4px}
+.ord-reservation-summary span{color:#557865;font-size:11px}
+.ord-reservation-summary strong{color:var(--green-dark);font-size:16px;line-height:1.3;font-variant-numeric:tabular-nums}
+.ord-reservation-summary p{color:#557865;font-size:11px;line-height:1.5}
+.ord-list-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 14px}
+.ord-list-toolbar input{width:min(100%,320px);min-height:42px;font-size:12px}
+.ord-picker{max-height:300px;overflow:auto;border:1px solid #dce5df;border-radius:12px;margin:14px 0;padding:8px}
+.ord-product{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:7px;border-bottom:1px solid #edf0ed;font-size:13px}
+.ord-product:last-child{border-bottom:0}
+.ord-product input{width:70px;padding:7px;border:1px solid #cfdcd4;border-radius:8px}
+@media(max-width:760px){.ord-status-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.ord-reservation-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.ord-reservation-summary p{grid-column:1/-1}}
+@media(max-width:600px){.ord-list-toolbar{align-items:stretch;flex-direction:column;gap:10px}.ord-list-toolbar input{width:100%}.ord-product{align-items:flex-start}.ord-product span{flex:1}}
+@media(max-width:430px){.ord-status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ord-status{padding:12px}.ord-reservation-summary{gap:10px;padding:12px}}

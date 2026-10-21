@@ -1,0 +1,29 @@
+.lo-panel{margin-bottom:20px}
+.lo-panel>h2,.lo-list-heading h2{font-size:15px;line-height:1.4}
+.lo-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;margin:14px 0 24px;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:var(--line)}
+.lo-metric{min-width:0;padding:14px;background:#fff}
+.lo-metric dt{color:var(--muted);font-size:11px;line-height:1.4}
+.lo-metric dd{margin:5px 0 0;color:var(--ink);font-size:21px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.lo-metric:first-child dd{color:var(--green)}
+.lo-metric dd small{color:var(--muted);font-size:11px;font-weight:500}
+.lo-list-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
+.lo-list-heading span{color:var(--muted);font-size:11px}
+.lo-panel .data-table{min-width:620px}
+.lo-detail-panel .section-heading{align-items:flex-start}
+.lo-detail-panel .section-heading p{overflow-wrap:anywhere}
+.lo-balance{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:15px 17px;border:1px solid #d7e9dd;border-radius:10px;background:var(--green-soft)}
+.lo-balance span{color:#557865;font-size:12px}
+.lo-balance strong{margin-left:auto;color:var(--green-dark);font-size:22px;font-variant-numeric:tabular-nums}
+.lo-balance strong small{font-size:12px;font-weight:500}
+.lo-balance.negative{border-color:#efdfbd;background:var(--amber-soft)}
+.lo-balance.negative strong,.lo-balance.negative p{color:var(--amber)}
+.lo-balance p{width:100%;font-size:11px}
+.lo-history{margin-top:16px;border:1px solid var(--line);border-radius:9px}
+.lo-history summary{cursor:pointer;padding:13px 15px;font-size:12px;font-weight:600}
+.lo-history[open] summary{border-bottom:1px solid var(--line)}
+.lo-history ul{margin:0;padding:0;list-style:none}
+.lo-history li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:12px 15px;border-bottom:1px solid var(--line);font-size:12px}
+.lo-history li:last-child{border-bottom:0}
+.lo-history li small{grid-column:1/-1;color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+@media(max-width:1000px){.lo-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.lo-metric:last-child{grid-column:span 2}}
+@media(max-width:650px){.lo-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.lo-detail-panel .section-heading{flex-direction:column}.lo-balance strong{font-size:19px}}

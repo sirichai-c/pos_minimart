@@ -1,5 +1,0 @@
-.ord-picker{max-height:300px;overflow:auto;border:1px solid #dce5df;border-radius:12px;margin:14px 0;padding:8px}
-.ord-product{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:7px;border-bottom:1px solid #edf0ed;font-size:13px}
-.ord-product:last-child{border-bottom:0}
-.ord-product input{width:70px;padding:7px;border:1px solid #cfdcd4;border-radius:8px}
-@media(max-width:600px){.ord-product{align-items:flex-start}.ord-product span{flex:1}}

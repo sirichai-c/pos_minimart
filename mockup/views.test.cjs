@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const POSData = require('./store.js');
+const POSData = require('./assets/js/store.js');
 
 function loadViews() {
   const context = { window: {}, POSData, Intl, Date, Number, Map, Math };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'views.js'), 'utf8'), context);
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'assets', 'js', 'views.js'), 'utf8'), context);
   return context.window.POSViews;
 }
 

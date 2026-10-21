@@ -1,8 +1,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const POSData=require('./store.js');
+const POSData=require('./assets/js/store.js');
 function fixture(){const data=new Map(),store=POSData.createStore({storage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)}});
  const context={window:{},document:{addEventListener(){}},POSData,Intl,Date,Number,Map,Math};
- for(const file of ['views.js','orders-ui.js'])vm.runInNewContext(fs.readFileSync(path.join(__dirname,file),'utf8'),context);
+ for(const file of ['views.js','orders-ui.js'])vm.runInNewContext(fs.readFileSync(path.join(__dirname,'assets','js',file),'utf8'),context);
  context.window.POSOrdersUI.install({store,render(){},showDialog(){},closeDialog(){},field(){},cancelButton:'',submitButton(){},uuid(){},toast(){},showError(){}});
  return {store,V:context.window.POSViews};}
 test('orders page shows reservation before pickup, escapes contact and keeps uncollected value out of sales',()=>{
@@ -13,6 +13,6 @@ test('orders page shows reservation before pickup, escapes contact and keeps unc
  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>x/);
  assert.match(V.shell('orders',{state,user:state.users[0],store}),/href="#orders"/);
  const index=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
- assert.ok(index.indexOf('src="orders.js"')<index.indexOf('src="store.js"'));
- assert.ok(index.indexOf('src="orders-ui.js"')<index.indexOf('src="app.js"'));
+ assert.ok(index.indexOf('src="assets/js/orders.js"')<index.indexOf('src="assets/js/store.js"'));
+ assert.ok(index.indexOf('src="assets/js/orders-ui.js"')<index.indexOf('src="assets/js/app.js"'));
 });

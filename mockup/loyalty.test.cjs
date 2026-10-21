@@ -1,4 +1,4 @@
-const test=require('node:test'),assert=require('node:assert/strict'),{createStore}=require('./store.js');
+const test=require('node:test'),assert=require('node:assert/strict'),{createStore}=require('./assets/js/store.js');
 function fixture(){const data=new Map(),storage={fail:false,getItem:k=>data.get(k)??null,setItem(k,v){if(this.fail)throw Error('full');data.set(k,v);}},store=createStore({storage});return {store,storage};}
 let n=0;const a=(x={})=>({key:`lo-${++n}`,userId:'owner',...x});const fail=(fn,c)=>assert.throws(fn,e=>e.code===c);
 function member(store,phone='0812345678'){return store.saveMember(a({name:'สมาชิกทดสอบ',phone,consent:true}));}
