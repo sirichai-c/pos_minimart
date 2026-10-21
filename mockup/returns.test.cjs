@@ -34,7 +34,7 @@ test('v1 localStorage migrates sales without losing transactions and rolls back 
   assert.equal(JSON.parse(storage.getItem('old')).version,1);
   storage.fail=false;
   const migrated=createStore({storage,key:'old'}).getState();
-  assert.equal(migrated.version,4);
+  assert.equal(migrated.version,5);
   assert.equal(migrated.sales.length,v1.sales.length);
   assert.equal(migrated.sales[0].id,v1.sales[0].id);
   assert.equal(migrated.shifts[0].summary.expected,v1.shifts[0].summary.expected);

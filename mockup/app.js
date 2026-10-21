@@ -39,10 +39,10 @@
     if(focusId&&focus instanceof HTMLInputElement){try{selection=[focus.selectionStart,focus.selectionEnd]}catch(_){}}
     const ctx=getContext();
     if(!ctx.user){throw new Error('ไม่พบผู้ใช้งานตัวอย่าง');}
-    if(ctx.user.role!=='owner'&&['inventory','returns','purchasing','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
+    if(ctx.user.role!=='owner'&&['inventory','returns','gross-profit','purchasing','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
     app.innerHTML=V.shell(page,ctx);
     document.getElementById('page-content').tabIndex=-1;
-    document.title='บ้านดี POS · '+({'stock-count':'ตรวจนับสต๊อก',sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',purchasing:'จัดซื้อและรับสินค้า',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
+    document.title='บ้านดี POS · '+({'stock-count':'ตรวจนับสต๊อก','gross-profit':'กำไรขั้นต้น',sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',purchasing:'จัดซื้อและรับสินค้า',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
     if(focusId){const next=document.getElementById(focusId);if(next){next.focus({preventScroll:true});if(selection&&selection[0]!=null){try{next.setSelectionRange(...selection)}catch(_){}}}}
     else if(focusData){
       const candidates=app.querySelectorAll(focusData.href?'a[href]':'[data-action]');
@@ -376,6 +376,7 @@
   window.addEventListener('hashchange',navigate);
   window.addEventListener('storage',event=>{if(event.key===dataKey)toast('ข้อมูลเปลี่ยนจากอีกแท็บ กรุณารีเฟรชก่อนทำรายการต่อ',true);});
   window.POSStockCountUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
+  window.POSGrossProfitUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
   navigate();
   window.BaanPOS={store,getCart:()=>cart.map(i=>({...i})),getPage:()=>page};
 })();

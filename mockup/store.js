@@ -73,7 +73,7 @@
     ];
     const products = catalog.map(([id,name,sku,barcode,price,stock,category,image]) => ({id,name,sku,barcode,price,stock,category,image,active:true}));
     const shift = { id: uuid(), openedAt: timestamp(180), closedAt: null, opening: 100000, userId: 'owner' };
-    const state = { version: 4, stockCounts:[], products, users: [
+    const state = { version: 5, stockCounts:[], products, users: [
       { id:'owner', name:'พิมพ์ · เจ้าของร้าน', username:'owner', role:'owner', active:true },
       { id:'cashier', name:'เมย์ · พนักงานขาย', username:'cashier', role:'cashier', active:true }
     ], currentUserId:'owner', shifts:[shift], activeShiftId:shift.id, sales:[], returns:[], cashRefunds:[], stockMovements:[], cashMovements:[],
@@ -96,6 +96,8 @@
       state.audit.push({id:uuid(),action:'SALE',description:'ขาย '+sale.receiptNo,userId:'cashier',createdAt:sale.createdAt});
     });
     products.forEach(p=>{p.stockVersion=state.stockMovements.filter(m=>m.productId===p.id).length;});
+    const grossModule = typeof module==='object'&&module.exports ? require('./gross-profit.js') : globalThis.POSGrossProfit;
+    grossModule.create({now,uuid,safe,error}).initialize(state);
     return state;
   }
   function createStore(options = {}) {
@@ -117,11 +119,12 @@
       let loaded;
       try {
         loaded = JSON.parse(saved);
-        if (![1,2,3,4].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
+        if (![1,2,3,4,5].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
         if (loaded.sales.some(sale=>typeof sale.id!=='string'||!Array.isArray(sale.items)||sale.items.some(line=>typeof line.productId!=='string'||!Number.isSafeInteger(line.quantity)||!Number.isSafeInteger(line.unitPrice)))) throw new Error();
         if (loaded.version === 2 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds))) throw new Error();
         if (loaded.version >= 3 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds) || !Array.isArray(loaded.suppliers) || !Array.isArray(loaded.purchaseOrders) || !Array.isArray(loaded.goodsReceipts))) throw new Error();
-        if (loaded.version === 4 && (!Array.isArray(loaded.stockCounts) || loaded.products.some(p=>!Number.isSafeInteger(p.stockVersion)||p.stockVersion<0))) throw new Error();
+        if (loaded.version >= 4 && (!Array.isArray(loaded.stockCounts) || loaded.products.some(p=>!Number.isSafeInteger(p.stockVersion)||p.stockVersion<0))) throw new Error();
+        if (loaded.version === 5 && (!Array.isArray(loaded.costLayers)||!Array.isArray(loaded.costWriteoffs))) throw new Error();
       } catch (_) { error('STORAGE_INVALID','ข้อมูลตัวอย่างที่บันทึกไว้ไม่ถูกต้อง กรุณาตรวจข้อมูลก่อนล้างข้อมูลตัวอย่าง'); }
       if (loaded.version < 4) {
         const migrated = clone(loaded);
@@ -137,7 +140,7 @@
           migrated.cashRefunds = [];
           migrated.pendingReturn = null;
         }
-        migrated.version = 4;
+        migrated.version = 5;
         migrated.stockCounts = [];
         migrated.products.forEach(p=>{p.stockVersion=migrated.stockMovements.filter(m=>m.productId===p.id).length;});
         if (loaded.version < 3) {
@@ -146,9 +149,15 @@
           migrated.goodsReceipts = [];
           migrated.pendingGoodsReceipt = null;
         }
+        const grossModule=typeof module==='object'&&module.exports?require('./gross-profit.js'):globalThis.POSGrossProfit;
+        grossModule.create({now,uuid,safe,error}).initialize(migrated);
         // Keep the old key and only replace it after the entire migration can be written.
         persist(migrated);
       } else state = loaded;
+      if(state.version<5){const next=clone(state);next.version=5;
+        const grossModule=typeof module==='object'&&module.exports?require('./gross-profit.js'):globalThis.POSGrossProfit;
+        grossModule.create({now,uuid,safe,error}).initialize(next);persist(next);
+      }
     } else persist(seed());
     function transaction(work) {
       const next = clone(state);
@@ -172,7 +181,7 @@
       product.stock = integer(safe(product.stock + quantity), 'คงเหลือ');
       product.stockVersion = safe((product.stockVersion??0)+1);
       const entry = {id:uuid(),productId:product.id,kind,quantity,balance:product.stock,reason,createdAt:now(),userId,reference};
-      s.stockMovements.push(entry); return entry;
+      s.stockMovements.push(entry); gross.movement(s,entry); return entry;
     }
     function request(action, args, work, owner = false) {
       const actor = user(state,args.userId,owner);
@@ -229,8 +238,19 @@
     }
     const countModule = typeof module==='object'&&module.exports ? require('./stock-count.js') : globalThis.POSStockCount;
     const counts=countModule.create({getState:()=>state,request,movement,audit,now,uuid,clone,error,integer,text,safe});
+    const grossModule = typeof module==='object'&&module.exports ? require('./gross-profit.js') : globalThis.POSGrossProfit;
+    const gross=grossModule.create({getState:()=>state,request,user,now,uuid,clone,error,integer,safe,dateKey});
     return {
       ...counts,
+      grossProfitReport: gross.report,
+      setOpeningCost(args){return request('openingCost',args,(s,userId)=>{
+        const layer=s.costLayers.find(l=>l.id===args.layerId&&l.source==='opening'&&l.remaining>0);
+        if(!layer)error('OPENING_LAYER_NOT_FOUND','ไม่พบยอดตั้งต้นที่ยังเหลือ');
+        if(layer.unitCost!==null)error('OPENING_COST_LOCKED','ตั้งราคาทุนยอดนี้แล้ว');
+        layer.unitCost=integer(args.unitCost,'ราคาทุนตั้งต้น');
+        audit(s,'OPENING_COST_SET','ตั้งต้นทุน SKU '+s.products.find(p=>p.id===layer.productId)?.sku,userId);
+        return layer;
+      },true);},
       getState: () => clone(state),
       getPendingCheckout: () => clone(state.pendingCheckout),
       getPendingReturn: () => clone(state.pendingReturn),
@@ -271,6 +291,7 @@
           if(args.tendered<total) error('INSUFFICIENT_CASH','เงินรับไม่พอชำระยอดบิล');
           const id=uuid();
           const sale={id,receiptNo:'POS1-'+id.replace(/-/g,''),createdAt:now(),shiftId:shift.id,userId,items,total,tendered:args.tendered,change:args.tendered-total};
+          gross.sale(s,sale);
           items.forEach(line=>movement(s,s.products.find(p=>p.id===line.productId),'sale',-line.quantity,'ขาย '+sale.receiptNo,userId,id));
           s.sales.push(sale);summary(s,shift.id);audit(s,'SALE','ขาย '+sale.receiptNo,userId);
           if(simulation==='unresolved') s.pendingCheckout={...clone(requestArgs),saleId:id};
@@ -320,6 +341,7 @@
           const total=lines.reduce((sum,line)=>safe(sum+line.total),0);
           const entry={id,returnNo:'RT1-'+id.replace(/-/g,''),saleId:source.sale.id,receiptNo:source.sale.receiptNo,shiftId:shift.id,
             createdAt:now(),userId,reason,total,lines};
+          gross.returned(s,entry,source.sale,s.returns.filter(r=>r.saleId===source.sale.id));
           s.returns.push(entry);
           s.cashRefunds.push({id:uuid(),returnId:id,shiftId:shift.id,amount:total,confirmedBy:userId,createdAt:entry.createdAt});
           lines.filter(line=>line.restockQuantity>0).forEach(line=>{
@@ -507,6 +529,7 @@
         const reason=text(args.reason,'เหตุผล');
         const quantity=args.kind==='count'?args.quantity-product.stock:args.quantity;
         const entry=movement(s,product,args.kind==='receive'?'manual_receive':args.kind,quantity,reason,userId,args.key);
+        if(quantity>0&&args.unitCost!==undefined){const layer=s.costLayers.find(l=>l.sourceId===entry.id);layer.unitCost=integer(args.unitCost,'ราคาทุน');}
         audit(s,'STOCK_'+args.kind.toUpperCase(),product.name+' '+quantity+' · '+reason,userId);return entry;
       },true); },
       voidSale(args) { return request('void',args,(s,userId)=>{
@@ -518,6 +541,7 @@
         const reason=text(args.reason,'เหตุผลยกเลิก');
         if(args.cashReturned!==true||args.goodsReturned!==true)error('RETURN_CONFIRMATION_REQUIRED','กรุณายืนยันคืนเงินครบและรับสินค้าคืนครบ');
         sale.voidedAt=now();sale.voidReason=reason;sale.voidedBy=userId;
+        gross.voided(s,sale);
         sale.items.forEach(line=>movement(s,s.products.find(p=>p.id===line.productId),'void',line.quantity,reason,userId,sale.id));
         audit(s,'SALE_VOIDED','ยกเลิก '+sale.receiptNo+' · '+reason,userId);return sale;
       },true); },
