@@ -73,7 +73,7 @@
     ];
     const products = catalog.map(([id,name,sku,barcode,price,stock,category,image]) => ({id,name,sku,barcode,price,stock,category,image,active:true}));
     const shift = { id: uuid(), openedAt: timestamp(180), closedAt: null, opening: 100000, userId: 'owner' };
-    const state = { version: 3, products, users: [
+    const state = { version: 4, stockCounts:[], products, users: [
       { id:'owner', name:'พิมพ์ · เจ้าของร้าน', username:'owner', role:'owner', active:true },
       { id:'cashier', name:'เมย์ · พนักงานขาย', username:'cashier', role:'cashier', active:true }
     ], currentUserId:'owner', shifts:[shift], activeShiftId:shift.id, sales:[], returns:[], cashRefunds:[], stockMovements:[], cashMovements:[],
@@ -95,6 +95,7 @@
       state.sales.push(sale);
       state.audit.push({id:uuid(),action:'SALE',description:'ขาย '+sale.receiptNo,userId:'cashier',createdAt:sale.createdAt});
     });
+    products.forEach(p=>{p.stockVersion=state.stockMovements.filter(m=>m.productId===p.id).length;});
     return state;
   }
   function createStore(options = {}) {
@@ -116,12 +117,13 @@
       let loaded;
       try {
         loaded = JSON.parse(saved);
-        if (![1,2,3].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
+        if (![1,2,3,4].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
         if (loaded.sales.some(sale=>typeof sale.id!=='string'||!Array.isArray(sale.items)||sale.items.some(line=>typeof line.productId!=='string'||!Number.isSafeInteger(line.quantity)||!Number.isSafeInteger(line.unitPrice)))) throw new Error();
         if (loaded.version === 2 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds))) throw new Error();
-        if (loaded.version === 3 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds) || !Array.isArray(loaded.suppliers) || !Array.isArray(loaded.purchaseOrders) || !Array.isArray(loaded.goodsReceipts))) throw new Error();
+        if (loaded.version >= 3 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds) || !Array.isArray(loaded.suppliers) || !Array.isArray(loaded.purchaseOrders) || !Array.isArray(loaded.goodsReceipts))) throw new Error();
+        if (loaded.version === 4 && (!Array.isArray(loaded.stockCounts) || loaded.products.some(p=>!Number.isSafeInteger(p.stockVersion)||p.stockVersion<0))) throw new Error();
       } catch (_) { error('STORAGE_INVALID','ข้อมูลตัวอย่างที่บันทึกไว้ไม่ถูกต้อง กรุณาตรวจข้อมูลก่อนล้างข้อมูลตัวอย่าง'); }
-      if (loaded.version < 3) {
+      if (loaded.version < 4) {
         const migrated = clone(loaded);
         if (loaded.version === 1) {
           migrated.sales.forEach(sale => sale.items.forEach((line,index) => { if (!line.id) line.id = sale.id + '-line-' + (index + 1); }));
@@ -135,11 +137,15 @@
           migrated.cashRefunds = [];
           migrated.pendingReturn = null;
         }
-        migrated.version = 3;
-        migrated.suppliers = [];
-        migrated.purchaseOrders = [];
-        migrated.goodsReceipts = [];
-        migrated.pendingGoodsReceipt = null;
+        migrated.version = 4;
+        migrated.stockCounts = [];
+        migrated.products.forEach(p=>{p.stockVersion=migrated.stockMovements.filter(m=>m.productId===p.id).length;});
+        if (loaded.version < 3) {
+          migrated.suppliers = [];
+          migrated.purchaseOrders = [];
+          migrated.goodsReceipts = [];
+          migrated.pendingGoodsReceipt = null;
+        }
         // Keep the old key and only replace it after the entire migration can be written.
         persist(migrated);
       } else state = loaded;
@@ -164,6 +170,7 @@
     function audit(s, action, description, userId) { s.audit.push({id:uuid(),action,description,userId,createdAt:now()}); }
     function movement(s, product, kind, quantity, reason, userId, reference) {
       product.stock = integer(safe(product.stock + quantity), 'คงเหลือ');
+      product.stockVersion = safe((product.stockVersion??0)+1);
       const entry = {id:uuid(),productId:product.id,kind,quantity,balance:product.stock,reason,createdAt:now(),userId,reference};
       s.stockMovements.push(entry); return entry;
     }
@@ -220,7 +227,10 @@
       return {...clone(po),lines,receipts:clone(receipts),orderedValue:lines.reduce((sum,line)=>safe(sum+safe(line.orderedQty*line.agreedUnitCost)),0),
         acceptedValue:receipts.reduce((sum,receipt)=>safe(sum+receipt.acceptedValue),0)};
     }
+    const countModule = typeof module==='object'&&module.exports ? require('./stock-count.js') : globalThis.POSStockCount;
+    const counts=countModule.create({getState:()=>state,request,movement,audit,now,uuid,clone,error,integer,text,safe});
     return {
+      ...counts,
       getState: () => clone(state),
       getPendingCheckout: () => clone(state.pendingCheckout),
       getPendingReturn: () => clone(state.pendingReturn),

@@ -42,7 +42,7 @@
     if(ctx.user.role!=='owner'&&['inventory','returns','purchasing','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
     app.innerHTML=V.shell(page,ctx);
     document.getElementById('page-content').tabIndex=-1;
-    document.title='บ้านดี POS · '+({sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',purchasing:'จัดซื้อและรับสินค้า',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
+    document.title='บ้านดี POS · '+({'stock-count':'ตรวจนับสต๊อก',sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',purchasing:'จัดซื้อและรับสินค้า',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
     if(focusId){const next=document.getElementById(focusId);if(next){next.focus({preventScroll:true});if(selection&&selection[0]!=null){try{next.setSelectionRange(...selection)}catch(_){}}}}
     else if(focusData){
       const candidates=app.querySelectorAll(focusData.href?'a[href]':'[data-action]');
@@ -375,6 +375,7 @@
   function navigate(){const next=location.hash.slice(1);if(next==='page-content'){document.getElementById('page-content')?.focus();return;}page=Object.hasOwn(V.pages,next)?next:store.getPendingReturn()?'returns':'sales';render();window.scrollTo({top:0});}
   window.addEventListener('hashchange',navigate);
   window.addEventListener('storage',event=>{if(event.key===dataKey)toast('ข้อมูลเปลี่ยนจากอีกแท็บ กรุณารีเฟรชก่อนทำรายการต่อ',true);});
+  window.POSStockCountUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
   navigate();
   window.BaanPOS={store,getCart:()=>cart.map(i=>({...i})),getPage:()=>page};
 })();

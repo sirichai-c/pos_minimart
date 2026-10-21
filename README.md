@@ -22,6 +22,7 @@ py -m http.server 4173 --bind 127.0.0.1 --directory mockup
 | [plan/pos-returns-refunds-spec.md](plan/pos-returns-refunds-spec.md) | กติกาคืนสินค้าและคืนเงินสด รวมเกณฑ์รับงานของโมดูลนี้ |
 | [plan/pos-purchasing-receiving-spec.md](plan/pos-purchasing-receiving-spec.md) | กติกาจัดซื้อ PO ใบรับสินค้า และยอดค้างรับ |
 | [plan/production-readiness.md](plan/production-readiness.md) | งานที่ยังต้องทำและเกณฑ์ตรวจรับก่อนใช้ POS ขายจริง |
+| [plan/pos-stock-count-spec.md](plan/pos-stock-count-spec.md) | รอบตรวจนับ ส่งตรวจ อนุมัติส่วนต่าง และตรวจสต๊อกที่เคลื่อนไหวระหว่างนับ |
 | [mockup/index.html](mockup/index.html) | หน้าเว็บตัวอย่างภาษาไทย เปิดได้โดยไม่ติดตั้งแพ็กเกจ |
 | [mockup/README.md](mockup/README.md) | วิธีใช้หน้าจอ ปุ่มลัด และขอบเขตของตัวอย่าง |
 | [mockup/store.test.cjs](mockup/store.test.cjs), [mockup/returns.test.cjs](mockup/returns.test.cjs), [mockup/views.test.cjs](mockup/views.test.cjs), [mockup/purchasing.test.cjs](mockup/purchasing.test.cjs) และ [mockup/purchasing.views.test.cjs](mockup/purchasing.views.test.cjs) | ชุดทดสอบกติกาข้อมูล คืนสินค้า จัดซื้อ และรายงาน |
@@ -31,9 +32,11 @@ py -m http.server 4173 --bind 127.0.0.1 --directory mockup
 ต้องมี Node.js สำหรับรันชุดทดสอบ จากโฟลเดอร์โปรเจกต์:
 
 ```powershell
-node --test --test-isolation=none mockup/store.test.cjs mockup/returns.test.cjs mockup/views.test.cjs mockup/purchasing.test.cjs mockup/purchasing.views.test.cjs
+node --test --test-isolation=none mockup/store.test.cjs mockup/returns.test.cjs mockup/views.test.cjs mockup/purchasing.test.cjs mockup/purchasing.views.test.cjs mockup/stock-count.test.cjs mockup/stock-count.views.test.cjs
 ```
 
 หน้าเว็บตัวอย่างเก็บข้อมูลใน `localStorage` ของเบราว์เซอร์ สามารถเริ่มข้อมูลตัวอย่างใหม่ได้จากหน้า **ระบบและข้อมูล** ข้อมูลของ URL แบบ `file://` กับ `http://127.0.0.1` แยกจากกัน
 
 สเปกใน `plan/` ยังเป็นฉบับเสนอสำหรับทบทวน ส่วน React, Fastify, SQLite, การยืนยันตัวตนจริง และ cloud backup เป็นงานของระบบจริงที่ยังไม่ได้พัฒนาในโปรเจกต์นี้
+
+โมดูล 3 **ตรวจนับสต๊อก** เปิดที่ `#stock-count`: เจ้าของเปิดรอบนับ พนักงานกรอกยอด/ส่งตรวจ แล้วเจ้าของอนุมัติให้เกิด stock movement เมื่อยอดต่างกัน หากมี movement ระหว่างนับต้องเปิดนับรายการนั้นใหม่ก่อน ข้อมูลตัวอย่างรุ่น 1–3 ย้ายเป็นรุ่น 4 โดยเก็บเอกสารเดิม
