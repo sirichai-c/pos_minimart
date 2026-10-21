@@ -105,7 +105,7 @@ test('v3 migration preserves purchasing and legacy docs and initializes versions
  const {store,storage}=fixture(),legacy=store.getState();legacy.version=3;delete legacy.stockCounts;legacy.products.forEach(p=>delete p.stockVersion);
  storage.setItem('test',JSON.stringify(legacy));storage.fail=true;code(()=>createStore({storage,key:'test'}),'STORAGE_FAILED');
  assert.equal(storage.getItem('test'),JSON.stringify(legacy));storage.fail=false;
- const after=createStore({storage,key:'test'}).getState();assert.equal(after.version,5);assert.deepEqual(after.stockCounts,[]);
+ const after=createStore({storage,key:'test'}).getState();assert.equal(after.version,6);assert.deepEqual(after.stockCounts,[]);
  assert.deepEqual(after.sales,legacy.sales);assert.deepEqual(after.purchaseOrders,legacy.purchaseOrders);
  assert.equal(after.products.find(p=>p.id==='water').stockVersion,legacy.stockMovements.filter(m=>m.productId==='water').length);
 });

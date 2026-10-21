@@ -73,7 +73,7 @@
     ];
     const products = catalog.map(([id,name,sku,barcode,price,stock,category,image]) => ({id,name,sku,barcode,price,stock,category,image,active:true}));
     const shift = { id: uuid(), openedAt: timestamp(180), closedAt: null, opening: 100000, userId: 'owner' };
-    const state = { version: 5, stockCounts:[], products, users: [
+    const state = { version: 6, stockCounts:[], orders:[], reservations:[], products, users: [
       { id:'owner', name:'พิมพ์ · เจ้าของร้าน', username:'owner', role:'owner', active:true },
       { id:'cashier', name:'เมย์ · พนักงานขาย', username:'cashier', role:'cashier', active:true }
     ], currentUserId:'owner', shifts:[shift], activeShiftId:shift.id, sales:[], returns:[], cashRefunds:[], stockMovements:[], cashMovements:[],
@@ -119,12 +119,13 @@
       let loaded;
       try {
         loaded = JSON.parse(saved);
-        if (![1,2,3,4,5].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
+        if (![1,2,3,4,5,6].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
         if (loaded.sales.some(sale=>typeof sale.id!=='string'||!Array.isArray(sale.items)||sale.items.some(line=>typeof line.productId!=='string'||!Number.isSafeInteger(line.quantity)||!Number.isSafeInteger(line.unitPrice)))) throw new Error();
         if (loaded.version === 2 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds))) throw new Error();
         if (loaded.version >= 3 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds) || !Array.isArray(loaded.suppliers) || !Array.isArray(loaded.purchaseOrders) || !Array.isArray(loaded.goodsReceipts))) throw new Error();
         if (loaded.version >= 4 && (!Array.isArray(loaded.stockCounts) || loaded.products.some(p=>!Number.isSafeInteger(p.stockVersion)||p.stockVersion<0))) throw new Error();
-        if (loaded.version === 5 && (!Array.isArray(loaded.costLayers)||!Array.isArray(loaded.costWriteoffs))) throw new Error();
+        if (loaded.version >= 5 && (!Array.isArray(loaded.costLayers)||!Array.isArray(loaded.costWriteoffs))) throw new Error();
+        if (loaded.version === 6 && (!Array.isArray(loaded.orders)||!Array.isArray(loaded.reservations))) throw new Error();
       } catch (_) { error('STORAGE_INVALID','ข้อมูลตัวอย่างที่บันทึกไว้ไม่ถูกต้อง กรุณาตรวจข้อมูลก่อนล้างข้อมูลตัวอย่าง'); }
       if (loaded.version < 4) {
         const migrated = clone(loaded);
@@ -140,7 +141,7 @@
           migrated.cashRefunds = [];
           migrated.pendingReturn = null;
         }
-        migrated.version = 5;
+        migrated.version = 6;
         migrated.stockCounts = [];
         migrated.products.forEach(p=>{p.stockVersion=migrated.stockMovements.filter(m=>m.productId===p.id).length;});
         if (loaded.version < 3) {
@@ -151,12 +152,14 @@
         }
         const grossModule=typeof module==='object'&&module.exports?require('./gross-profit.js'):globalThis.POSGrossProfit;
         grossModule.create({now,uuid,safe,error}).initialize(migrated);
+        migrated.orders=[];migrated.reservations=[];
         // Keep the old key and only replace it after the entire migration can be written.
         persist(migrated);
       } else state = loaded;
-      if(state.version<5){const next=clone(state);next.version=5;
+      if(state.version<6){const next=clone(state);next.version=6;
         const grossModule=typeof module==='object'&&module.exports?require('./gross-profit.js'):globalThis.POSGrossProfit;
-        grossModule.create({now,uuid,safe,error}).initialize(next);persist(next);
+        if(state.version<5)grossModule.create({now,uuid,safe,error}).initialize(next);
+        next.orders=[];next.reservations=[];persist(next);
       }
     } else persist(seed());
     function transaction(work) {
@@ -178,6 +181,7 @@
     }
     function audit(s, action, description, userId) { s.audit.push({id:uuid(),action,description,userId,createdAt:now()}); }
     function movement(s, product, kind, quantity, reason, userId, reference) {
+      if(quantity<0&&product.stock+quantity<orders.reserved(s,product.id))error('RESERVED_STOCK_CONFLICT','ยอดคงเหลือจะต่ำกว่าจำนวนจอง กรุณาจัดการออเดอร์ก่อน');
       product.stock = integer(safe(product.stock + quantity), 'คงเหลือ');
       product.stockVersion = safe((product.stockVersion??0)+1);
       const entry = {id:uuid(),productId:product.id,kind,quantity,balance:product.stock,reason,createdAt:now(),userId,reference};
@@ -240,8 +244,13 @@
     const counts=countModule.create({getState:()=>state,request,movement,audit,now,uuid,clone,error,integer,text,safe});
     const grossModule = typeof module==='object'&&module.exports ? require('./gross-profit.js') : globalThis.POSGrossProfit;
     const gross=grossModule.create({getState:()=>state,request,user,now,uuid,clone,error,integer,safe,dateKey});
+    const ordersModule=typeof module==='object'&&module.exports?require('./orders.js'):globalThis.POSOrders;
+    const orders=ordersModule.create({getState:()=>state,request,user,open,movement,audit,gross,summary,now,uuid,clone,error,integer,text,safe});
     return {
       ...counts,
+      saveOrder:orders.saveOrder,confirmOrder:orders.confirmOrder,readyOrder:orders.readyOrder,cancelOrder:orders.cancelOrder,
+      expireOrder:orders.expireOrder,checkoutOrder:orders.checkoutOrder,getOrder:orders.getOrder,orderReport:orders.orderReport,
+      availableToSell(productId){return orders.available(state,productId);},
       grossProfitReport: gross.report,
       setOpeningCost(args){return request('openingCost',args,(s,userId)=>{
         const layer=s.costLayers.find(l=>l.id===args.layerId&&l.source==='opening'&&l.remaining>0);
@@ -285,6 +294,7 @@
           const items=Array.from(aggregated,([productId,quantity])=>{
             const p=s.products.find(p=>p.id===productId);
             if(p.stock<quantity) error('INSUFFICIENT_STOCK','สินค้า '+p.name+' มีคงเหลือไม่พอ');
+            if(orders.available(s,p.id)<quantity) error('INSUFFICIENT_AVAILABLE_STOCK','สินค้า '+p.name+' มีจำนวนที่ขายได้ไม่พอ');
             return {id:uuid(),productId,name:p.name,sku:p.sku,unitPrice:p.price,quantity,total:safe(p.price*quantity)};
           });
           const total=items.reduce((sum,line)=>safe(sum+line.total),0);

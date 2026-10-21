@@ -42,7 +42,7 @@
     if(ctx.user.role!=='owner'&&['inventory','returns','gross-profit','purchasing','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
     app.innerHTML=V.shell(page,ctx);
     document.getElementById('page-content').tabIndex=-1;
-    document.title='บ้านดี POS · '+({'stock-count':'ตรวจนับสต๊อก','gross-profit':'กำไรขั้นต้น',sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',purchasing:'จัดซื้อและรับสินค้า',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
+    document.title='บ้านดี POS · '+({'stock-count':'ตรวจนับสต๊อก','gross-profit':'กำไรขั้นต้น',orders:'ออเดอร์และจองสินค้า',sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',purchasing:'จัดซื้อและรับสินค้า',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
     if(focusId){const next=document.getElementById(focusId);if(next){next.focus({preventScroll:true});if(selection&&selection[0]!=null){try{next.setSelectionRange(...selection)}catch(_){}}}}
     else if(focusData){
       const candidates=app.querySelectorAll(focusData.href?'a[href]':'[data-action]');
@@ -76,7 +76,7 @@
   function addProduct(id){
     ensureCartEditable();const p=store.getState().products.find(p=>p.id===id);if(!p||!p.active)throw new Error('สินค้านี้ปิดจำหน่ายแล้ว');
     const items=cart.map(i=>({...i}));const item=items.find(i=>i.productId===id);
-    if((item?.quantity||0)+1>p.stock)throw new Error(`สินค้า ${p.name} มีคงเหลือ ${p.stock} ชิ้น`);
+    const available=store.availableToSell(id);if((item?.quantity||0)+1>available)throw new Error(`สินค้า ${p.name} ขายได้ ${available} ชิ้น`);
     if(item)item.quantity++;else items.push({productId:id,quantity:1,unitPrice:p.price});
     saveDraft(items);render();
   }
@@ -238,7 +238,7 @@
     menu:()=>app.querySelector('.app-shell').classList.toggle('menu-open'),
     'focus-search':()=>{document.getElementById('product-search').focus();toast('พร้อมรับรหัสจากเครื่องสแกนแบบคีย์บอร์ด');},
     add:el=>addProduct(el.dataset.id),
-    quantity:el=>{ensureCartEditable();const id=el.dataset.id;const delta=Number(el.dataset.delta);const items=cart.map(i=>({...i}));const item=items.find(i=>i.productId===id);if(!item)return;const p=store.getState().products.find(p=>p.id===id);if(item.quantity+delta>p.stock)throw new Error(`สินค้ามีคงเหลือ ${p.stock} ชิ้น`);item.quantity+=delta;saveDraft(items.filter(i=>i.quantity>0));render();},
+    quantity:el=>{ensureCartEditable();const id=el.dataset.id;const delta=Number(el.dataset.delta);const items=cart.map(i=>({...i}));const item=items.find(i=>i.productId===id);if(!item)return;const available=store.availableToSell(id);if(item.quantity+delta>available)throw new Error(`สินค้าขายได้ ${available} ชิ้น`);item.quantity+=delta;saveDraft(items.filter(i=>i.quantity>0));render();},
     remove:el=>{ensureCartEditable();saveDraft(cart.filter(i=>i.productId!==el.dataset.id));render();},
     category:el=>{category=el.dataset.category;catalogPage=0;render();},
     'catalog-page':el=>{catalogPage=Math.max(0,catalogPage+Number(el.dataset.delta));render();},
@@ -377,6 +377,7 @@
   window.addEventListener('storage',event=>{if(event.key===dataKey)toast('ข้อมูลเปลี่ยนจากอีกแท็บ กรุณารีเฟรชก่อนทำรายการต่อ',true);});
   window.POSStockCountUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
   window.POSGrossProfitUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
+  window.POSOrdersUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
   navigate();
   window.BaanPOS={store,getCart:()=>cart.map(i=>({...i})),getPage:()=>page};
 })();
