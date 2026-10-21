@@ -73,7 +73,7 @@
     ];
     const products = catalog.map(([id,name,sku,barcode,price,stock,category,image]) => ({id,name,sku,barcode,price,stock,category,image,active:true}));
     const shift = { id: uuid(), openedAt: timestamp(180), closedAt: null, opening: 100000, userId: 'owner' };
-    const state = { version: 6, stockCounts:[], orders:[], reservations:[], products, users: [
+    const state = { version: 7, stockCounts:[], orders:[], reservations:[], members:[], loyaltyEntries:[], products, users: [
       { id:'owner', name:'พิมพ์ · เจ้าของร้าน', username:'owner', role:'owner', active:true },
       { id:'cashier', name:'เมย์ · พนักงานขาย', username:'cashier', role:'cashier', active:true }
     ], currentUserId:'owner', shifts:[shift], activeShiftId:shift.id, sales:[], returns:[], cashRefunds:[], stockMovements:[], cashMovements:[],
@@ -92,6 +92,8 @@
       const total = items.reduce((s,i) => s+i.total,0);
       const tendered = Math.ceil(total/10000)*10000;
       const sale = {id:saleId,receiptNo:'POS1-'+saleId.replace(/-/g,''),createdAt:timestamp(120-index*20),shiftId:shift.id,userId:'cashier',items,total,tendered,change:tendered-total};
+      sale.gross=total;sale.discount=0;sale.cashDue=total;sale.memberId=null;sale.redeemPoints=0;sale.pointsEarned=0;
+      sale.items.forEach(line=>{line.discount=0;line.netTotal=line.total;line.unitDiscounts=Array.from({length:line.quantity},(_,i)=>({ordinal:i+1,discount:0,returnedBy:null}));});
       state.sales.push(sale);
       state.audit.push({id:uuid(),action:'SALE',description:'ขาย '+sale.receiptNo,userId:'cashier',createdAt:sale.createdAt});
     });
@@ -99,6 +101,16 @@
     const grossModule = typeof module==='object'&&module.exports ? require('./gross-profit.js') : globalThis.POSGrossProfit;
     grossModule.create({now,uuid,safe,error}).initialize(state);
     return state;
+  }
+  function migrateLegacyLoyalty(s) {
+    s.members=[];s.loyaltyEntries=[];
+    s.sales.forEach(sale=>{sale.gross=sale.total;sale.discount=0;sale.cashDue=sale.total;sale.memberId=null;sale.redeemPoints=0;sale.pointsEarned=0;
+      sale.items.forEach(line=>{line.discount=0;line.netTotal=line.total;line.unitDiscounts=Array.from({length:line.quantity},(_,i)=>({ordinal:i+1,discount:0,returnedBy:null}));});});
+    for(const record of s.returns||[])for(const line of record.lines){
+      const source=s.sales.find(sale=>sale.id===record.saleId)?.items.find(item=>item.id===line.saleLineId);
+      if(!source)continue;
+      source.unitDiscounts.filter(unit=>!unit.returnedBy).slice(0,line.quantity).forEach(unit=>{unit.returnedBy=line.id;});
+    }
   }
   function createStore(options = {}) {
     const key = options.key || 'baan-ran-pos-demo-v1';
@@ -119,13 +131,14 @@
       let loaded;
       try {
         loaded = JSON.parse(saved);
-        if (![1,2,3,4,5,6].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
+        if (![1,2,3,4,5,6,7].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
         if (loaded.sales.some(sale=>typeof sale.id!=='string'||!Array.isArray(sale.items)||sale.items.some(line=>typeof line.productId!=='string'||!Number.isSafeInteger(line.quantity)||!Number.isSafeInteger(line.unitPrice)))) throw new Error();
         if (loaded.version === 2 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds))) throw new Error();
         if (loaded.version >= 3 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds) || !Array.isArray(loaded.suppliers) || !Array.isArray(loaded.purchaseOrders) || !Array.isArray(loaded.goodsReceipts))) throw new Error();
         if (loaded.version >= 4 && (!Array.isArray(loaded.stockCounts) || loaded.products.some(p=>!Number.isSafeInteger(p.stockVersion)||p.stockVersion<0))) throw new Error();
         if (loaded.version >= 5 && (!Array.isArray(loaded.costLayers)||!Array.isArray(loaded.costWriteoffs))) throw new Error();
-        if (loaded.version === 6 && (!Array.isArray(loaded.orders)||!Array.isArray(loaded.reservations))) throw new Error();
+        if (loaded.version >= 6 && (!Array.isArray(loaded.orders)||!Array.isArray(loaded.reservations))) throw new Error();
+        if (loaded.version === 7 && (!Array.isArray(loaded.members)||!Array.isArray(loaded.loyaltyEntries))) throw new Error();
       } catch (_) { error('STORAGE_INVALID','ข้อมูลตัวอย่างที่บันทึกไว้ไม่ถูกต้อง กรุณาตรวจข้อมูลก่อนล้างข้อมูลตัวอย่าง'); }
       if (loaded.version < 4) {
         const migrated = clone(loaded);
@@ -141,7 +154,7 @@
           migrated.cashRefunds = [];
           migrated.pendingReturn = null;
         }
-        migrated.version = 6;
+        migrated.version = 7;
         migrated.stockCounts = [];
         migrated.products.forEach(p=>{p.stockVersion=migrated.stockMovements.filter(m=>m.productId===p.id).length;});
         if (loaded.version < 3) {
@@ -153,13 +166,16 @@
         const grossModule=typeof module==='object'&&module.exports?require('./gross-profit.js'):globalThis.POSGrossProfit;
         grossModule.create({now,uuid,safe,error}).initialize(migrated);
         migrated.orders=[];migrated.reservations=[];
+        migrateLegacyLoyalty(migrated);
         // Keep the old key and only replace it after the entire migration can be written.
         persist(migrated);
       } else state = loaded;
-      if(state.version<6){const next=clone(state);next.version=6;
+      if(state.version<7){const next=clone(state);next.version=7;
         const grossModule=typeof module==='object'&&module.exports?require('./gross-profit.js'):globalThis.POSGrossProfit;
         if(state.version<5)grossModule.create({now,uuid,safe,error}).initialize(next);
-        next.orders=[];next.reservations=[];persist(next);
+        if(state.version<6){next.orders=[];next.reservations=[];}
+        migrateLegacyLoyalty(next);
+        persist(next);
       }
     } else persist(seed());
     function transaction(work) {
@@ -244,10 +260,15 @@
     const counts=countModule.create({getState:()=>state,request,movement,audit,now,uuid,clone,error,integer,text,safe});
     const grossModule = typeof module==='object'&&module.exports ? require('./gross-profit.js') : globalThis.POSGrossProfit;
     const gross=grossModule.create({getState:()=>state,request,user,now,uuid,clone,error,integer,safe,dateKey});
+    const loyaltyModule=typeof module==='object'&&module.exports?require('./loyalty.js'):globalThis.POSLoyalty;
+    const loyalty=loyaltyModule.create({getState:()=>state,request,user,audit,now,uuid,clone,error,integer,text,safe});
     const ordersModule=typeof module==='object'&&module.exports?require('./orders.js'):globalThis.POSOrders;
-    const orders=ordersModule.create({getState:()=>state,request,user,open,movement,audit,gross,summary,now,uuid,clone,error,integer,text,safe});
+    const orders=ordersModule.create({getState:()=>state,request,user,open,movement,audit,gross,loyalty,summary,now,uuid,clone,error,integer,text,safe});
     return {
       ...counts,
+      saveMember:loyalty.saveMember,lookupMember:loyalty.lookupMember,getMember:loyalty.getMember,pointsBalance:loyalty.pointsBalance,
+      loyaltyReport:loyalty.report,
+      refundPreview(saleId,lines){const sale=state.sales.find(s=>s.id===saleId);if(!sale)error('SALE_NOT_FOUND','ไม่พบบิล');return loyalty.refundPreview(sale,lines);},
       saveOrder:orders.saveOrder,confirmOrder:orders.confirmOrder,readyOrder:orders.readyOrder,cancelOrder:orders.cancelOrder,
       expireOrder:orders.expireOrder,checkoutOrder:orders.checkoutOrder,getOrder:orders.getOrder,orderReport:orders.orderReport,
       availableToSell(productId){return orders.available(state,productId);},
@@ -272,7 +293,7 @@
         const actor=user(state,args.userId);
         const simulation=args.simulate || 'none';
         if (!['none','unresolved','failure'].includes(simulation)) error('INVALID_SIMULATION','รูปแบบทดสอบไม่ถูกต้อง');
-        const requestArgs={key:args.key,userId:actor.id,items:args.items,tendered:args.tendered};
+        const requestArgs={key:args.key,userId:actor.id,items:args.items,tendered:args.tendered,memberId:args.memberId,redeemPoints:args.redeemPoints};
         const previous=state.requests['request:'+text(args.key,'รหัสคำขอ')];
         // Replayed checkout is resolved before price/stock/open-shift validation.
         if (previous) return {sale:request('checkout',requestArgs,()=>{})};
@@ -298,9 +319,11 @@
             return {id:uuid(),productId,name:p.name,sku:p.sku,unitPrice:p.price,quantity,total:safe(p.price*quantity)};
           });
           const total=items.reduce((sum,line)=>safe(sum+line.total),0);
-          if(args.tendered<total) error('INSUFFICIENT_CASH','เงินรับไม่พอชำระยอดบิล');
           const id=uuid();
-          const sale={id,receiptNo:'POS1-'+id.replace(/-/g,''),createdAt:now(),shiftId:shift.id,userId,items,total,tendered:args.tendered,change:args.tendered-total};
+          const sale={id,receiptNo:'POS1-'+id.replace(/-/g,''),createdAt:now(),shiftId:shift.id,userId,items,total,tendered:args.tendered,change:0};
+          loyalty.onSale(s,sale,args);
+          if(args.tendered<sale.total)error('INSUFFICIENT_CASH','เงินรับไม่พอชำระยอดบิล');
+          sale.change=safe(args.tendered-sale.total);
           gross.sale(s,sale);
           items.forEach(line=>movement(s,s.products.find(p=>p.id===line.productId),'sale',-line.quantity,'ขาย '+sale.receiptNo,userId,id));
           s.sales.push(sale);summary(s,shift.id);audit(s,'SALE','ขาย '+sale.receiptNo,userId);
@@ -351,9 +374,10 @@
           const total=lines.reduce((sum,line)=>safe(sum+line.total),0);
           const entry={id,returnNo:'RT1-'+id.replace(/-/g,''),saleId:source.sale.id,receiptNo:source.sale.receiptNo,shiftId:shift.id,
             createdAt:now(),userId,reason,total,lines};
+          loyalty.onReturn(s,s.sales.find(x=>x.id===source.sale.id),entry);
           gross.returned(s,entry,source.sale,s.returns.filter(r=>r.saleId===source.sale.id));
           s.returns.push(entry);
-          s.cashRefunds.push({id:uuid(),returnId:id,shiftId:shift.id,amount:total,confirmedBy:userId,createdAt:entry.createdAt});
+          s.cashRefunds.push({id:uuid(),returnId:id,shiftId:shift.id,amount:entry.total,confirmedBy:userId,createdAt:entry.createdAt});
           lines.filter(line=>line.restockQuantity>0).forEach(line=>{
             const product=s.products.find(p=>p.id===line.productId);
             if(!product)error('PRODUCT_NOT_FOUND','ไม่พบสินค้าต้นทาง');
@@ -551,6 +575,7 @@
         const reason=text(args.reason,'เหตุผลยกเลิก');
         if(args.cashReturned!==true||args.goodsReturned!==true)error('RETURN_CONFIRMATION_REQUIRED','กรุณายืนยันคืนเงินครบและรับสินค้าคืนครบ');
         sale.voidedAt=now();sale.voidReason=reason;sale.voidedBy=userId;
+        loyalty.onVoid(s,sale);
         gross.voided(s,sale);
         sale.items.forEach(line=>movement(s,s.products.find(p=>p.id===line.productId),'void',line.quantity,reason,userId,sale.id));
         audit(s,'SALE_VOIDED','ยกเลิก '+sale.receiptNo+' · '+reason,userId);return sale;

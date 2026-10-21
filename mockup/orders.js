@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.POSOrders=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  function create({getState,request,user,open,movement,audit,gross,summary,now,uuid,clone,error,integer,text,safe}){
+  function create({getState,request,user,open,movement,audit,gross,loyalty,summary,now,uuid,clone,error,integer,text,safe}){
     const live=(o,time=Date.now())=>['reserved','ready'].includes(o.status)&&Date.parse(o.expiresAt)>time;
     const find=(s,id)=>{const o=s.orders.find(x=>x.id===id);if(!o)error('ORDER_NOT_FOUND','ไม่พบออเดอร์');return o;};
     function reserved(s,productId,time=Date.now(),excludeOrderId=null){return s.orders.filter(o=>o.id!==excludeOrderId&&live(o,time)).reduce((n,o)=>safe(n+o.lines.filter(l=>l.productId===productId).reduce((v,l)=>safe(v+l.quantity),0)),0);}
@@ -65,7 +65,7 @@
       o.status='expired';o.expiredAt=now();release(s,o,o.expiredAt);o.history.push({kind:'expired',at:o.expiredAt,userId});audit(s,'ORDER_EXPIRED',o.orderNo,userId);return o;
     });}
     function checkoutOrder(args){
-      const requestArgs={key:args.key,userId:args.userId,orderId:args.orderId,tendered:args.tendered};
+      const requestArgs={key:args.key,userId:args.userId,orderId:args.orderId,tendered:args.tendered,memberId:args.memberId,redeemPoints:args.redeemPoints};
       const sale=request('orderCheckout',requestArgs,(s,userId)=>{
         if(s.pendingCheckout)error('CHECKOUT_UNRESOLVED','กรุณากู้ผลบิลเดิมก่อนขาย');
         if(s.pendingReturn)error('RETURN_UNRESOLVED','กรุณากู้ผลรายการคืนเดิมก่อนขาย');
@@ -74,13 +74,15 @@
         if(status(o)==='expired')error('ORDER_EXPIRED','ออเดอร์หมดเวลาจองแล้ว');
         if(!['reserved','ready'].includes(o.status))error('ORDER_NOT_RESERVED','ออเดอร์ยังไม่จอง');
         const shift=open(s);integer(args.tendered,'เงินรับ');
-        if(args.tendered<o.total)error('INSUFFICIENT_CASH','เงินรับไม่พอ');
         for(const l of o.lines){const p=s.products.find(p=>p.id===l.productId);if(!p?.active)error('PRODUCT_INACTIVE','สินค้าปิดจำหน่าย กรุณาให้เจ้าของตรวจออเดอร์');
           if(p.stock-reserved(s,p.id,Date.now(),o.id)<l.quantity)error('INSUFFICIENT_AVAILABLE_STOCK','ของสำหรับออเดอร์ไม่พอ');}
         const id=uuid(),time=now();
         const sale={id,receiptNo:'POS1-'+id.replace(/-/g,''),orderId:o.id,createdAt:time,shiftId:shift.id,userId,
           items:o.lines.map(l=>({id:uuid(),productId:l.productId,name:l.name,sku:l.sku,unitPrice:l.unitPrice,quantity:l.quantity,total:l.total})),
-          total:o.total,tendered:args.tendered,change:args.tendered-o.total};
+          total:o.total,tendered:args.tendered,change:0};
+        loyalty.onSale(s,sale,args);
+        if(args.tendered<sale.total)error('INSUFFICIENT_CASH','เงินรับไม่พอ');
+        sale.change=safe(args.tendered-sale.total);
         gross.sale(s,sale);release(s,o,time);o.status='completed';o.completedAt=time;o.saleId=id;o.history.push({kind:'completed',at:time,userId});
         sale.items.forEach(l=>movement(s,s.products.find(p=>p.id===l.productId),'sale',-l.quantity,'รับออเดอร์ '+o.orderNo,userId,id));
         s.sales.push(sale);summary(s,shift.id);audit(s,'ORDER_COMPLETED',o.orderNo+' · '+sale.receiptNo,userId);

@@ -12,7 +12,7 @@ py -m http.server 4173 --bind 127.0.0.1 --directory mockup
 
 แล้วเปิด [http://127.0.0.1:4173/](http://127.0.0.1:4173/) ใน Chrome หรือ Edge กด `Ctrl+C` ในหน้าต่าง PowerShell เพื่อหยุดเซิร์ฟเวอร์ หรือเปิด `mockup/index.html` โดยตรงได้
 
-หน้าเว็บมีข้อมูลตัวอย่างสำหรับลองขายเงินสด ออกใบเสร็จ คืนสินค้าและคืนเงินสดบางส่วนหรือทั้งบิล จัดการสินค้าและสต๊อก ออกใบสั่งซื้อและรับของหลายรอบ ยกเลิกบิล เปิด–ปิดกะ ดูรายงาน และสลับบทบาทเจ้าของร้านกับพนักงานขาย รายละเอียดวิธีลองใช้อยู่ใน [คู่มือ mockup](mockup/README.md)
+หน้าเว็บมีข้อมูลตัวอย่างสำหรับลองขายเงินสด ออกใบเสร็จ คืนสินค้า จัดซื้อและรับของ ตรวจนับสต๊อก ดูกำไรขั้นต้น รับออเดอร์จองสินค้า และสะสม/ใช้แต้มสมาชิก รายละเอียดวิธีลองใช้อยู่ใน [คู่มือ mockup](mockup/README.md)
 
 ## ไฟล์สำคัญ
 
@@ -25,14 +25,14 @@ py -m http.server 4173 --bind 127.0.0.1 --directory mockup
 | [plan/pos-stock-count-spec.md](plan/pos-stock-count-spec.md) | รอบตรวจนับ ส่งตรวจ อนุมัติส่วนต่าง และตรวจสต๊อกที่เคลื่อนไหวระหว่างนับ |
 | [mockup/index.html](mockup/index.html) | หน้าเว็บตัวอย่างภาษาไทย เปิดได้โดยไม่ติดตั้งแพ็กเกจ |
 | [mockup/README.md](mockup/README.md) | วิธีใช้หน้าจอ ปุ่มลัด และขอบเขตของตัวอย่าง |
-| [mockup/store.test.cjs](mockup/store.test.cjs), [mockup/returns.test.cjs](mockup/returns.test.cjs), [mockup/views.test.cjs](mockup/views.test.cjs), [mockup/purchasing.test.cjs](mockup/purchasing.test.cjs) และ [mockup/purchasing.views.test.cjs](mockup/purchasing.views.test.cjs) | ชุดทดสอบกติกาข้อมูล คืนสินค้า จัดซื้อ และรายงาน |
+| ไฟล์ `mockup/*.test.cjs` | ชุดทดสอบกติกาขาย คืนสินค้า จัดซื้อ ตรวจนับ กำไรขั้นต้น ออเดอร์จอง สมาชิก/แต้ม และหน้าจอ |
 
 ## ตรวจสอบ
 
 ต้องมี Node.js สำหรับรันชุดทดสอบ จากโฟลเดอร์โปรเจกต์:
 
 ```powershell
-node --test --test-isolation=none mockup/store.test.cjs mockup/returns.test.cjs mockup/views.test.cjs mockup/purchasing.test.cjs mockup/purchasing.views.test.cjs mockup/stock-count.test.cjs mockup/stock-count.views.test.cjs
+node --test --test-isolation=none mockup/store.test.cjs mockup/returns.test.cjs mockup/views.test.cjs mockup/purchasing.test.cjs mockup/purchasing.views.test.cjs mockup/stock-count.test.cjs mockup/stock-count.views.test.cjs mockup/gross-profit.test.cjs mockup/orders.test.cjs mockup/orders.views.test.cjs mockup/loyalty.test.cjs mockup/loyalty.views.test.cjs
 ```
 
 หน้าเว็บตัวอย่างเก็บข้อมูลใน `localStorage` ของเบราว์เซอร์ สามารถเริ่มข้อมูลตัวอย่างใหม่ได้จากหน้า **ระบบและข้อมูล** ข้อมูลของ URL แบบ `file://` กับ `http://127.0.0.1` แยกจากกัน
@@ -40,3 +40,9 @@ node --test --test-isolation=none mockup/store.test.cjs mockup/returns.test.cjs 
 สเปกใน `plan/` ยังเป็นฉบับเสนอสำหรับทบทวน ส่วน React, Fastify, SQLite, การยืนยันตัวตนจริง และ cloud backup เป็นงานของระบบจริงที่ยังไม่ได้พัฒนาในโปรเจกต์นี้
 
 โมดูล 3 **ตรวจนับสต๊อก** เปิดที่ `#stock-count`: เจ้าของเปิดรอบนับ พนักงานกรอกยอด/ส่งตรวจ แล้วเจ้าของอนุมัติให้เกิด stock movement เมื่อยอดต่างกัน หากมี movement ระหว่างนับต้องเปิดนับรายการนั้นใหม่ก่อน ข้อมูลตัวอย่างรุ่น 1–3 ย้ายเป็นรุ่น 4 โดยเก็บเอกสารเดิม
+
+โมดูล 4 **กำไรขั้นต้น** เปิดที่ `#gross-profit`: ต้นทุน FIFO จากใบรับ/ยอดตั้งต้น รายงานแยกสินค้า/วัน/กะ โดยต้นทุนที่ไม่ทราบจะไม่ถูกนับเป็นศูนย์
+
+โมดูล 5 **ออเดอร์และจองสินค้า** เปิดที่ `#orders`: ยืนยันจองกันจำนวนที่ขายได้ แต่ยังไม่ตัดสต๊อกหรือรับเงิน; รับเงินตอนลูกค้ามารับและสร้างบิลตามราคาที่ตกลง
+
+โมดูล 6 **สมาชิกและแต้มสะสม** เปิดที่ `#members`: เจ้าของสมัครสมาชิก พนักงานค้นจากเบอร์ตอนขาย ใช้แต้มลดเงินสดและรับแต้มจากยอดสุทธิ การคืนและ void กลับแต้มตามบิล

@@ -39,10 +39,10 @@
     if(focusId&&focus instanceof HTMLInputElement){try{selection=[focus.selectionStart,focus.selectionEnd]}catch(_){}}
     const ctx=getContext();
     if(!ctx.user){throw new Error('ไม่พบผู้ใช้งานตัวอย่าง');}
-    if(ctx.user.role!=='owner'&&['inventory','returns','gross-profit','purchasing','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
+    if(ctx.user.role!=='owner'&&['inventory','returns','gross-profit','purchasing','members','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
     app.innerHTML=V.shell(page,ctx);
     document.getElementById('page-content').tabIndex=-1;
-    document.title='บ้านดี POS · '+({'stock-count':'ตรวจนับสต๊อก','gross-profit':'กำไรขั้นต้น',orders:'ออเดอร์และจองสินค้า',sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',purchasing:'จัดซื้อและรับสินค้า',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
+    document.title='บ้านดี POS · '+({'stock-count':'ตรวจนับสต๊อก','gross-profit':'กำไรขั้นต้น',orders:'ออเดอร์และจองสินค้า',members:'สมาชิกและแต้ม',sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',purchasing:'จัดซื้อและรับสินค้า',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
     if(focusId){const next=document.getElementById(focusId);if(next){next.focus({preventScroll:true});if(selection&&selection[0]!=null){try{next.setSelectionRange(...selection)}catch(_){}}}}
     else if(focusData){
       const candidates=app.querySelectorAll(focusData.href?'a[href]':'[data-action]');
@@ -99,11 +99,21 @@
     if(!cart.length){toast('เลือกสินค้าใส่ตะกร้าก่อนรับชำระเงิน',true);return;}
     const total=cartTotal();
     const amounts=[...new Set([total,Math.ceil(total/10000)*10000,50000,100000])].filter(n=>n>=total);
-    showDialog('รับชำระเงิน','ตรวจสอบยอด รับเงินสด แล้วคืนเงินทอนให้ลูกค้า',`<div class="payment-method">${V.icon('cash')}เงินสด · ${cart.reduce((n,i)=>n+i.quantity,0)} ชิ้น</div><div class="payment-total"><span>ยอดที่ต้องชำระ</span><strong class="num">${V.money(total)}</strong></div><label class="field"><span>รับเงินจากลูกค้า</span><div class="cash-input"><input id="cash-tendered" name="tendered" type="number" min="0" step="0.01" placeholder="0.00" required inputmode="decimal" autocomplete="off" aria-label="เงินสดที่รับจากลูกค้า"><span>บาท</span></div></label><div class="cash-presets">${amounts.map((n,i)=>`<button type="button" data-action="cash-preset" data-amount="${n}">${i===0?'พอดี':V.money(n)}</button>`).join('')}</div><div class="change-preview"><span>เงินทอน</span><strong id="change-value" class="num">฿0.00</strong></div>`,cancelButton+submitButton('ยืนยันการขาย','check'),'checkout');
+    showDialog('รับชำระเงิน','ตรวจสอบยอด รับเงินสด แล้วคืนเงินทอนให้ลูกค้า',`<div class="payment-method">${V.icon('cash')}เงินสด · ${cart.reduce((n,i)=>n+i.quantity,0)} ชิ้น</div><div class="payment-total"><span>ยอดสินค้าก่อนลด</span><strong class="num">${V.money(total)}</strong></div><label class="field"><span>เบอร์สมาชิก (ไม่บังคับ)</span><input id="checkout-member-phone" name="memberPhone" type="tel" autocomplete="off" placeholder="ค้นด้วยเบอร์โทร"></label><input type="hidden" name="memberId" id="checkout-member-id"><p id="checkout-member-result" class="muted">ไม่ผูกสมาชิก</p>${field('ใช้แต้ม (1 แต้ม = 1 สตางค์)','redeemPoints','0','number','min="0" step="1" inputmode="numeric"')}<div class="stat-line"><span>ส่วนลดแต้ม</span><strong id="checkout-discount">${V.money(0)}</strong></div><div class="payment-total"><span>เงินสดที่ต้องชำระ</span><strong class="num" id="checkout-due">${V.money(total)}</strong></div><p id="checkout-earned" class="muted">ไม่สะสมแต้ม</p><label class="field"><span>รับเงินจากลูกค้า</span><div class="cash-input"><input id="cash-tendered" name="tendered" type="number" min="0" step="0.01" placeholder="0.00" required inputmode="decimal" autocomplete="off" aria-label="เงินสดที่รับจากลูกค้า"><span>บาท</span></div></label><div class="cash-presets">${amounts.map((n,i)=>`<button type="button" data-action="cash-preset" data-amount="${n}">${i===0?'พอดี':V.money(n)}</button>`).join('')}</div><div class="change-preview"><span>เงินทอน</span><strong id="change-value" class="num">฿0.00</strong></div>`,cancelButton+submitButton('ยืนยันการขาย','check'),'checkout');
     document.getElementById('dialog-submit').disabled=true;
     document.getElementById('cash-tendered').focus();
   }
-  function updateChange(){const input=document.getElementById('cash-tendered');if(!input)return;let amount=-1;try{amount=POSData.parseMoney(input.value)}catch(_){}const total=cartTotal();document.getElementById('change-value').textContent=V.money(Math.max(0,amount-total));document.getElementById('dialog-submit').disabled=busy||amount<total;}
+  function updateChange(){const input=document.getElementById('cash-tendered');if(!input)return;let amount=-1;try{amount=POSData.parseMoney(input.value)}catch(_){}
+    const phone=document.getElementById('checkout-member-phone').value.trim(),memberInput=document.getElementById('checkout-member-id'),result=document.getElementById('checkout-member-result');
+    let member=null;if(phone){try{member=store.lookupMember({phone,userId:store.getState().currentUserId});}catch(_){} }
+    memberInput.value=member?.active?member.id:'';result.textContent=!phone?'ไม่ผูกสมาชิก':member?.active?`${member.name} · ${member.phoneMasked} · มี ${member.balance} แต้ม`:'ไม่พบสมาชิกที่ใช้งานได้';
+    const raw=document.querySelector('form[data-form="checkout"] [name="redeemPoints"]').value,redeem=raw===''?0:Number(raw),gross=cartTotal();
+    const valid=Number.isSafeInteger(redeem)&&redeem>=0&&redeem<=gross&&(!redeem||!!memberInput.value&&member.balance>=redeem);
+    const due=gross-(valid?redeem:0);
+    document.getElementById('checkout-discount').textContent=V.money(valid?redeem:0);document.getElementById('checkout-due').textContent=V.money(due);
+    document.getElementById('checkout-earned').textContent=memberInput.value?`จะได้ ${Math.floor(due/100)} แต้ม`:'ไม่สะสมแต้ม';
+    document.getElementById('change-value').textContent=V.money(Math.max(0,amount-due));document.getElementById('dialog-submit').disabled=busy||!valid||!!phone&&!memberInput.value||amount<due;
+  }
   function receipt(id,success=false){
     const state=store.getState();const sale=state.sales.find(s=>s.id===id);if(!sale)throw new Error('ไม่พบบิลที่ต้องการ');
     const info=store.getReturnable(sale.id);
@@ -122,7 +132,7 @@
   function updateReturnPreview(form) {
     const source=store.getReturnable(form.elements.saleId.value);
     const payload=returnPayload(form);
-    const total=payload.lines.reduce((sum,line)=>sum+line.quantity*(source.lines.find(item=>item.id===line.saleLineId)?.unitPrice||0),0);
+    const total=store.refundPreview(payload.saleId,payload.lines).total;
     const shift=V.shift(store.getState());
     const expected=shift?store.shiftSummary(shift.id).expected-total:null;
     form.querySelector('#return-total').textContent=V.money(total);
@@ -290,7 +300,7 @@
     else if(el.id==='return-search'){returnQuery=el.value;render();}
     else if(el.id==='purchasing-search'){purchasingQuery=el.value;render();}
     else if(el.closest('form[data-form="return"]')){const form=el.closest('form');saveReturnDraft(returnPayload(form));updateReturnPreview(form);}
-    else if(el.id==='cash-tendered')updateChange();
+    else if(el.id==='cash-tendered'||el.id==='checkout-member-phone'||el.name==='redeemPoints')updateChange();
     else if(el.id==='counted-cash'){let value;try{value=POSData.parseMoney(el.value)}catch(_){value=null}const current=V.shift(store.getState());const diff=value===null?null:value-store.shiftSummary(current.id).expected;const output=document.getElementById('cash-difference');output.textContent=diff===null?'—':(diff>0?'+':'')+V.money(diff);output.className=diff<0?'text-red':diff>0?'text-amber':'text-green';}
   });
   document.addEventListener('change',event=>{const el=event.target;if(el.id==='history-date'){historyDate=el.value;render();}else if(el.id==='history-status'){historyStatus=el.value;render();}else if(el.id==='purchasing-supplier'){purchasingSupplier=el.value;render();}else if(el.id==='purchase-report-product'){purchasingProduct=el.value;render();}else if(el.id==='purchase-report-date'){purchasingDate=el.value;render();}else if(el.id==='report-date'){if(!el.value){el.value=reportDate;toast('กรุณาเลือกวันที่สำหรับรายงาน',true);return;}reportDate=el.value;reportShift='';render();}else if(el.id==='report-shift'){reportShift=el.value;render();}else if(el.id==='checkout-scenario'){scenario=el.value;toast('ตั้งค่าสถานการณ์ตัวอย่างแล้ว');}else if(el.closest('form[data-form="return"]')){const form=el.closest('form');saveReturnDraft(returnPayload(form));updateReturnPreview(form);}});
@@ -308,12 +318,15 @@
     try{
       switch(form.dataset.form){
         case 'checkout':{
-          const tendered=POSData.parseMoney(value('tendered'));if(tendered<cartTotal())throw new Error('เงินที่รับต้องไม่น้อยกว่ายอดชำระ');
+          updateChange();const tendered=POSData.parseMoney(value('tendered'));
+          const memberId=value('memberId')||undefined,redeemPoints=Number(value('redeemPoints')||0),due=cartTotal()-redeemPoints;
+          if(value('memberPhone')&&!memberId)throw new Error('ไม่พบสมาชิกที่ใช้งานได้');
+          if(tendered<due)throw new Error('เงินที่รับต้องไม่น้อยกว่ายอดชำระ');
           const key=requestKey||uuid();saveDraft(cart,key);busy=true;
           const button=document.getElementById('dialog-submit');button.disabled=true;button.innerHTML='<span class="loading-spinner"></span>กำลังบันทึก…';
           await new Promise(resolve=>setTimeout(resolve,350));
           const mode=scenario;scenario='none';
-          const result=store.checkout({key,userId:user.id,items:cart.map(i=>({...i})),tendered,simulate:mode});
+          const result=store.checkout({key,userId:user.id,items:cart.map(i=>({...i})),tendered,memberId,redeemPoints,simulate:mode});
           busy=false;
           if(result.unresolved){closeDialog();render();showDialog('ยังไม่ทราบผลยืนยัน','กรุณาตรวจสอบรายการเดิมก่อนเริ่มขายใหม่',`<div class="inline-info">${V.icon('info')} ระบบยังไม่ได้รับผลยืนยันรายการนี้ คุณสามารถตรวจสอบบิลเดิมได้โดยไม่ทำรายการขายซ้ำ</div>`,'<button type="button" class="button primary" data-action="recover">ตรวจสอบรายการเดิม</button>');}
           else{saveDraft([]);closeDialog();render();receipt(result.sale.id,true);}
@@ -378,6 +391,7 @@
   window.POSStockCountUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
   window.POSGrossProfitUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
   window.POSOrdersUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
+  window.POSLoyaltyUI.install({store,V,render,showDialog,closeDialog,field,cancelButton,submitButton,uuid,toast,showError});
   navigate();
   window.BaanPOS={store,getCart:()=>cart.map(i=>({...i})),getPage:()=>page};
 })();

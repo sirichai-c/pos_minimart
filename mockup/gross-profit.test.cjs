@@ -40,7 +40,7 @@ test('legacy stock stays unknown and failed persistence rolls back allocation',(
   storage.fail=true;const current=store.getState();
   fail(()=>store.checkout({key:key(),userId:'owner',items:[{productId:'water',quantity:1,unitPrice:700}],tendered:700}),'STORAGE_FAILED');
   assert.deepEqual(store.getState(),current);
-  assert.equal(before.version,6);
+  assert.equal(before.version,7);
 });
 
 test('void restores original cost layers and cancels revenue and COGS',()=>{
@@ -57,6 +57,6 @@ test('version 4 activation is atomic and does not infer costs for old transactio
   const {store,storage}=fixture();const legacy=store.getState();legacy.version=4;delete legacy.costLayers;delete legacy.costWriteoffs;delete legacy.costActivatedAt;
   storage.setItem('baan-ran-pos-demo-v1',JSON.stringify(legacy));
   const upgraded=createStore({storage});const after=upgraded.getState();
-  assert.equal(after.version,6);assert.equal(after.costLayers.reduce((n,l)=>n+l.remaining,0),after.products.reduce((n,p)=>n+p.stock,0));
+  assert.equal(after.version,7);assert.equal(after.costLayers.reduce((n,l)=>n+l.remaining,0),after.products.reduce((n,p)=>n+p.stock,0));
   assert.equal(upgraded.grossProfitReport({userId:'owner'}).rows.length,0);
 });

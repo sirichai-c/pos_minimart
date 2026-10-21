@@ -95,8 +95,8 @@
       }
       for(const sale of s.sales){for(const line of sale.items){
         if(!line.costAllocations)continue; // Sales before activation have no historical cost snapshot.
-        add(sale.createdAt,line.productId,sale.shiftId,sale.receiptNo,'sale',line.total,line.costAllocations,line.quantity);
-        if(sale.voidedAt)add(sale.voidedAt,line.productId,sale.shiftId,sale.receiptNo,'void',-line.total,line.costAllocations,-line.quantity);
+        add(sale.createdAt,line.productId,sale.shiftId,sale.receiptNo,'sale',line.netTotal??line.total,line.costAllocations,line.quantity);
+        if(sale.voidedAt)add(sale.voidedAt,line.productId,sale.shiftId,sale.receiptNo,'void',-(line.netTotal??line.total),line.costAllocations,-line.quantity);
       }}
       for(const entry of s.returns){const sale=s.sales.find(x=>x.id===entry.saleId);if(!sale)continue;
         for(const line of entry.lines)if(line.costAllocations?.length)add(entry.createdAt,line.productId,entry.shiftId,entry.returnNo,'return',-line.total,line.costAllocations,-line.quantity);

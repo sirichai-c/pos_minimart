@@ -26,7 +26,7 @@ test('v2 demo data migrates to purchasing state without losing sales or returns'
   delete legacy.suppliers; delete legacy.purchaseOrders; delete legacy.goodsReceipts; delete legacy.pendingGoodsReceipt;
   storage.setItem('demo', JSON.stringify(legacy));
   const upgraded = createStore({ storage, key: 'demo' }).getState();
-  assert.equal(upgraded.version, 6);
+  assert.equal(upgraded.version, 7);
   assert.equal(upgraded.sales.length, original.sales.length);
   assert.equal(upgraded.stockMovements.length, original.stockMovements.length);
   assert.deepEqual([upgraded.suppliers, upgraded.purchaseOrders, upgraded.goodsReceipts], [[], [], []]);

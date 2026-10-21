@@ -20,19 +20,27 @@
       'ord-edit':el=>form('save',store.getOrder(el.dataset.id)),
       'ord-confirm':el=>{const o=store.getOrder(el.dataset.id),s=store.getState(),owner=s.users.find(u=>u.id===s.currentUserId)?.role==='owner';simple('confirm',o,'ยืนยันจอง',`<p>ระบบตรวจจำนวนที่ขายได้ใหม่และล็อกราคาตาม catalog ณ เวลาจอง</p>${owner?field('ชั่วโมงจอง (ปกติ 48, สูงสุด 168)','reserveHours','48','number','required min="1" max="168" step="1"'):''}`);},
       'ord-ready':el=>simple('ready',store.getOrder(el.dataset.id),'พร้อมรับ','<p>เตรียมของครบแล้ว สินค้ายังถูกจอง</p>'),
-      'ord-checkout':el=>{const o=store.getOrder(el.dataset.id);simple('checkout',o,'รับเงินและส่งมอบ',`<p>ยอดตามราคาที่จอง ${money(o.total)} · สร้างบิลขายหนึ่งใบและตัดสต๊อกพร้อมปล่อยจอง</p>${field('รับเงินสด (บาท)','tendered',window.POSData.money(o.total),'text','required inputmode="decimal"')}`);},
+      'ord-checkout':el=>{const o=store.getOrder(el.dataset.id);simple('checkout',o,'รับเงินและส่งมอบ',`<p>ยอดตามราคาที่จอง ${money(o.total)} · สร้างบิลขายหนึ่งใบและตัดสต๊อกพร้อมปล่อยจอง</p>${field('เบอร์สมาชิก (ไม่บังคับ)','memberPhone','','tel','autocomplete="off"')}<p id="ord-member-result" class="muted">ไม่ผูกสมาชิก</p>${field('ใช้แต้ม','redeemPoints','0','number','min="0" step="1"')}<p>เงินสดที่ต้องรับ <strong id="ord-cash-due">${money(o.total)}</strong> · <span id="ord-points-earned">ไม่สะสมแต้ม</span></p>${field('รับเงินสด (บาท)','tendered',window.POSData.money(o.total),'text','required inputmode="decimal"')}`);},
       'ord-cancel':el=>simple('cancel',store.getOrder(el.dataset.id),'ยกเลิกออเดอร์',`<label class="field"><span>เหตุผล</span><textarea name="reason" required maxlength="300"></textarea></label>`),
       'ord-expire':el=>simple('expire',store.getOrder(el.dataset.id),'ปิดรายการหมดเวลา','<p>ปล่อยจำนวนที่จองไว้</p>')
     };
     document.addEventListener('click',e=>{const el=e.target.closest('[data-action]'),fn=el&&actions[el.dataset.action];if(!fn)return;e.preventDefault();try{fn(el);}catch(err){showError(err);}});
-    document.addEventListener('input',e=>{if(e.target.id==='ord-search'){query=e.target.value;render();}});
+    function pickupQuote(form){const o=store.getOrder(form.elements.orderId.value),phone=form.elements.memberPhone.value.trim();let member=null;
+      if(phone)try{member=store.lookupMember({phone,userId:currentUser()});}catch(_){}
+      const redeem=Number(form.elements.redeemPoints.value||0),valid=Number.isSafeInteger(redeem)&&redeem>=0&&redeem<=o.total&&(!redeem||member?.active&&member.balance>=redeem);
+      const due=o.total-(valid?redeem:0);form.querySelector('#ord-member-result').textContent=!phone?'ไม่ผูกสมาชิก':member?.active?`${member.name} · ${member.balance} แต้ม`:'ไม่พบสมาชิกที่ใช้งานได้';
+      form.querySelector('#ord-cash-due').textContent=money(due);form.querySelector('#ord-points-earned').textContent=member?.active?`จะได้ ${Math.floor(due/100)} แต้ม`:'ไม่สะสมแต้ม';
+      form.querySelector('#dialog-submit').disabled=!valid||!!phone&&!member?.active;
+      return {memberId:member?.active?member.id:undefined,redeemPoints:redeem,due};
+    }
+    document.addEventListener('input',e=>{if(e.target.id==='ord-search'){query=e.target.value;render();}else if(e.target.closest('form[data-form="ord-checkout"]'))pickupQuote(e.target.closest('form'));});
     document.addEventListener('submit',e=>{const f=e.target,mode=f.dataset.form;if(!mode?.startsWith('ord-'))return;e.preventDefault();const d=new FormData(f),v=k=>String(d.get(k)||''),base={key:v('key'),userId:currentUser(),orderId:v('orderId')};
       try{let result;if(mode==='ord-save'){const lines=store.getState().products.filter(p=>Number(d.get('qty-'+p.id))>0).map(p=>({productId:p.id,quantity:Number(d.get('qty-'+p.id))}));result=store.saveOrder({...base,contactName:v('contactName'),contactPhone:v('contactPhone'),channel:v('channel'),lines});}
         if(mode==='ord-confirm')result=store.confirmOrder({...base,reserveHours:Number(v('reserveHours')||48)});
         if(mode==='ord-ready')result=store.readyOrder(base);
         if(mode==='ord-cancel')result=store.cancelOrder({...base,reason:v('reason')});
         if(mode==='ord-expire')result=store.expireOrder(base);
-        if(mode==='ord-checkout')result=store.checkoutOrder({...base,tendered:window.POSData.parseMoney(v('tendered'))}).sale;
+        if(mode==='ord-checkout'){const quote=pickupQuote(f);if(v('memberPhone')&&!quote.memberId)throw Error('ไม่พบสมาชิกที่ใช้งานได้');result=store.checkoutOrder({...base,tendered:window.POSData.parseMoney(v('tendered')),memberId:quote.memberId,redeemPoints:quote.redeemPoints}).sale;}
         selected=result?.orderId||result?.id||selected;closeDialog();render();toast(mode==='ord-checkout'?'บันทึกบิลรับออเดอร์แล้ว':'บันทึกออเดอร์แล้ว');
       }catch(err){showError(err);}
     });

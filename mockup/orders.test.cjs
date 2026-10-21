@@ -66,6 +66,6 @@ test('stock count approval below reserved quantity is rejected atomically; void 
 test('version 5 data upgrades orders without changing historical sales or cost layers',()=>{
  const {store,storage}=fixture(),old=store.getState();old.version=5;delete old.orders;delete old.reservations;
  storage.setItem('baan-ran-pos-demo-v1',JSON.stringify(old));const next=createStore({storage}).getState();
- assert.equal(next.version,6);assert.deepEqual(next.orders,[]);assert.deepEqual(next.reservations,[]);
+ assert.equal(next.version,7);assert.deepEqual(next.orders,[]);assert.deepEqual(next.reservations,[]);
  assert.deepEqual(next.sales,old.sales);assert.deepEqual(next.costLayers,old.costLayers);
 });
