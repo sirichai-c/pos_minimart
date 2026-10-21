@@ -5,6 +5,7 @@
   const dialog = document.getElementById('app-dialog');
   const draftKey = 'baandee-pos-draft-v1';
   const returnDraftKey = 'baandee-pos-return-draft-v1';
+  const goodsReceiptDraftKey = 'baandee-pos-goods-receipt-draft-v1';
   const dataKey = 'baandee-pos-demo-v1';
   const uuid = () => globalThis.crypto?.randomUUID?.() || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16)});
   let store;
@@ -22,11 +23,14 @@
     else {cart=initialState.products.filter(p=>p.active&&p.stock>1).slice(0,2).map((p,i)=>({productId:p.id,quantity:i+1,unitPrice:p.price}));window.localStorage.setItem(draftKey,JSON.stringify({items:cart,key:null}));}
   } catch (_) {cart=[];requestKey=null;}
   let page='sales';
-  let category='ทั้งหมด',query='',catalogPage=0,inventoryQuery='',historyQuery='',historyDate=V.dayKey(),historyStatus='all',reportDate=V.dayKey(),reportShift='',returnQuery='';
+  let category='ทั้งหมด',query='',catalogPage=0,inventoryQuery='',historyQuery='',historyDate=V.dayKey(),historyStatus='all',reportDate=V.dayKey(),reportShift='',returnQuery='',purchasingQuery='',purchasingSupplier='',purchasingProduct='',purchasingDate=V.dayKey();
   let returnDraft=null;
   try { returnDraft=JSON.parse(window.localStorage.getItem(returnDraftKey)||'null'); } catch (_) { returnDraft=null; }
+  let goodsReceiptDraft=null;
+  try { goodsReceiptDraft=JSON.parse(window.localStorage.getItem(goodsReceiptDraftKey)||'null'); } catch (_) { goodsReceiptDraft=null; }
+  let poLineIndex=0;
   let scenario='none',busy=false,toastTimer=null,lastFocus=null;
-  function getContext(){const state=store.getState();return{state,user:state.users.find(u=>u.id===state.currentUserId),store,cart,category,query,catalogPage,inventoryQuery,historyQuery,historyDate,historyStatus,reportDate,reportShift,returnQuery,returnDraft,scenario};}
+  function getContext(){const state=store.getState();return{state,user:state.users.find(u=>u.id===state.currentUserId),store,cart,category,query,catalogPage,inventoryQuery,historyQuery,historyDate,historyStatus,reportDate,reportShift,returnQuery,returnDraft,purchasingQuery,purchasingSupplier,purchasingProduct,purchasingDate,scenario};}
   function render(){
     const focus=document.activeElement;
     const focusId=focus?.id;
@@ -35,10 +39,10 @@
     if(focusId&&focus instanceof HTMLInputElement){try{selection=[focus.selectionStart,focus.selectionEnd]}catch(_){}}
     const ctx=getContext();
     if(!ctx.user){throw new Error('ไม่พบผู้ใช้งานตัวอย่าง');}
-    if(ctx.user.role!=='owner'&&['inventory','returns','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
+    if(ctx.user.role!=='owner'&&['inventory','returns','purchasing','users','system'].includes(page)){page='sales';history.replaceState(null,'','#sales');}
     app.innerHTML=V.shell(page,ctx);
     document.getElementById('page-content').tabIndex=-1;
-    document.title='บ้านดี POS · '+({sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
+    document.title='บ้านดี POS · '+({sales:'ขายหน้าร้าน',inventory:'สินค้าและสต๊อก',history:'ประวัติการขาย',returns:'คืนสินค้า',shifts:'กะและเงินสด',reports:'รายงานการขาย',purchasing:'จัดซื้อและรับสินค้า',users:'ผู้ใช้งาน',system:'ระบบและข้อมูล'}[page]);
     if(focusId){const next=document.getElementById(focusId);if(next){next.focus({preventScroll:true});if(selection&&selection[0]!=null){try{next.setSelectionRange(...selection)}catch(_){}}}}
     else if(focusData){
       const candidates=app.querySelectorAll(focusData.href?'a[href]':'[data-action]');
@@ -58,6 +62,15 @@
     return next;
   }
   function clearReturnDraft(){window.localStorage.removeItem(returnDraftKey);returnDraft=null;}
+  function saveGoodsReceiptDraft(payload) {
+    const comparable=value=>JSON.stringify({userId:value.userId,poId:value.poId,deliveryRef:value.deliveryRef,lines:value.lines});
+    const previous=goodsReceiptDraft;
+    const next={...payload,key:previous&&comparable(previous)===comparable(payload)?previous.key:uuid()};
+    window.localStorage.setItem(goodsReceiptDraftKey,JSON.stringify(next));
+    goodsReceiptDraft=next;
+    return next;
+  }
+  function clearGoodsReceiptDraft(){window.localStorage.removeItem(goodsReceiptDraftKey);goodsReceiptDraft=null;}
   function cartTotal(){return cart.reduce((sum,i)=>sum+i.unitPrice*i.quantity,0);}
   function ensureCartEditable(){if(store.getPendingCheckout())throw new Error('กรุณาตรวจสอบผลรายการเดิมก่อนแก้ไขตะกร้า');}
   function addProduct(id){
@@ -146,14 +159,71 @@
     const p=store.getState().products.find(p=>p.id===id);
     showDialog(p?'แก้ไขสินค้า':'เพิ่มสินค้าใหม่',p?'การเปลี่ยนราคาจะไม่แก้ยอดในบิลที่ขายไปแล้ว':'ใส่ข้อมูลสินค้าเพื่อเตรียมขึ้นชั้นและเริ่มขาย',`<input type="hidden" name="id" value="${V.h(p?.id||'')}"><div class="form-grid">${field('ชื่อสินค้า','name',p?.name||'','text','required maxlength="100"',true)}${field('SKU','sku',p?.sku||'','text','required maxlength="40" placeholder="เช่น DRINK-001"')}${field('ราคาขาย (บาท)','price',p?POSData.money(p.price).replace(/,/g,''):'','number','required min="0" step="0.01" inputmode="decimal"')}${field('บาร์โค้ด <small>ไม่บังคับ</small>','barcode',p?.barcode||'','text','maxlength="40" inputmode="numeric"',true)}<label class="field"><span>หมวดหมู่</span><select name="category">${V.categories.slice(1).map(c=>`<option ${p?.category===c?'selected':''}>${c}</option>`).join('')}</select></label>${p?`<label class="field"><span>สถานะจำหน่าย</span><select name="active"><option value="true" ${p.active?'selected':''}>เปิดจำหน่าย</option><option value="false" ${!p.active?'selected':''}>ปิดจำหน่าย</option></select></label>`:field('คงเหลือตั้งต้น (ชิ้น)','stock','0','number','required min="0" step="1"')}</div>${p?'<div class="subtle-note">'+V.icon('info')+'หากต้องการเปลี่ยนยอดคงเหลือ ให้ใช้รับเข้า / ปรับสต๊อก เพื่อเก็บประวัติ</div>':''}`,cancelButton+submitButton('บันทึกสินค้า'),'product');
   }
-  function stockForm(id){const p=store.getState().products.find(p=>p.id===id);if(!p)return;showDialog('รับเข้า / ปรับสต๊อก',p.name+` · คงเหลือ ${p.stock} ชิ้น`,`<input type="hidden" name="productId" value="${V.h(id)}"><div class="form-grid"><label class="field full"><span>ประเภทการเปลี่ยนยอด</span><select name="kind" id="stock-kind"><option value="receive">รับสินค้าเข้า</option><option value="count">ปรับเป็นยอดที่นับได้จริง</option></select></label>${field('จำนวน (ชิ้น)','quantity','','number','required min="0" step="1"',true)}<label class="field full"><span>เหตุผล / ที่มาของสินค้า</span><textarea name="reason" placeholder="เช่น รับสินค้าเข้าร้าน หรือปรับตามการนับจริง" required maxlength="300"></textarea></label></div><div class="subtle-note">${V.icon('info')}การปรับยอดนับจริงหมายถึงจำนวนทั้งหมดที่นับได้ ไม่ใช่จำนวนที่เพิ่มหรือลด</div>`,cancelButton+submitButton('บันทึกสต๊อก'),'stock');}
+  function stockForm(id){const p=store.getState().products.find(p=>p.id===id);if(!p)return;showDialog('รับเข้า / ปรับสต๊อก',p.name+` · คงเหลือ ${p.stock} ชิ้น`,`<input type="hidden" name="productId" value="${V.h(id)}"><div class="form-grid"><label class="field full"><span>ประเภทการเปลี่ยนยอด</span><select name="kind" id="stock-kind"><option value="receive">รับเข้าด้วยมือ (ยอดตั้งต้น/เหตุพิเศษ)</option><option value="count">ปรับเป็นยอดที่นับได้จริง</option></select></label>${field('จำนวน (ชิ้น)','quantity','','number','required min="0" step="1"',true)}<label class="field full"><span>เหตุผล / ที่มาของสินค้า</span><textarea name="reason" placeholder="เช่น ยอดตั้งต้น หรือปรับตามการนับจริง" required maxlength="300"></textarea></label></div><div class="subtle-note">${V.icon('info')}สินค้าที่ซื้อจากซัพพลายเออร์ให้รับผ่านหน้า จัดซื้อและรับสินค้า เพื่อผูกกับ PO และใบรับ</div>`,cancelButton+submitButton('บันทึกสต๊อก'),'stock');}
   function stockHistory(id){const state=store.getState();const p=state.products.find(p=>p.id===id);const moves=state.stockMovements.filter(m=>m.productId===id).slice().reverse();showDialog('ประวัติสต๊อก',`${p.name} · คงเหลือ ${p.stock} ชิ้น`,moves.length?`<div class="movement-list">${moves.map(m=>`<div class="movement-row">${V.icon(m.quantity>=0?'arrowDown':'arrowUp')}<div><strong>${V.h(m.reason||m.kind)}</strong><p>${V.date(m.createdAt,true)} · ${V.h(V.actor(state,m.userId))}</p></div><span class="num ${m.quantity>=0?'text-green':'text-amber'}">${m.quantity>0?'+':''}${m.quantity}<small class="muted" style="display:block;font-size:9px;margin-top:4px">คงเหลือ ${m.balance}</small></span></div>`).join('')}</div>`:V.empty('ยังไม่มีประวัติ','รายการรับเข้า ขาย และปรับยอดจะปรากฏที่นี่','box'),'<button type="button" class="button primary" data-action="dialog-close">ปิด</button>');}
+  function supplierForm(id) {
+    const supplier=store.getState().suppliers.find(item=>item.id===id);
+    showDialog(supplier?'แก้ไขซัพพลายเออร์':'เพิ่มซัพพลายเออร์','ข้อมูลติดต่อสำหรับใบสั่งซื้อ',`<input type="hidden" name="id" value="${V.h(supplier?.id||'')}"><div class="form-grid">${field('รหัสภายใน','code',supplier?.code||'','text','required maxlength="40"',true)}${field('ชื่อซัพพลายเออร์','name',supplier?.name||'','text','required maxlength="100"',true)}${field('ข้อมูลติดต่อ','contact',supplier?.contact||'','text','maxlength="160"',true)}<label class="field full"><span>สถานะ</span><select name="active"><option value="true" ${!supplier||supplier.active?'selected':''}>ใช้งาน</option><option value="false" ${supplier&&!supplier.active?'selected':''}>ปิดใช้งาน</option></select></label></div><p class="subtle-note">PO เดิมยังเปิดดูได้แม้ปิดใช้งานซัพพลายเออร์</p>`,cancelButton+submitButton('บันทึกซัพพลายเออร์'),'supplier');
+  }
+  function poLineRow(line={}) {
+    const state=store.getState(),index=poLineIndex++;
+    return `<div class="purchase-entry po-entry" data-line-index="${index}"><label class="field purchase-product"><span>สินค้า</span><select name="productId" required><option value="">เลือกสินค้า</option>${state.products.filter(p=>p.active||p.id===line.productId).map(p=>`<option value="${V.h(p.id)}" ${p.id===line.productId?'selected':''}>${V.h(p.name)} · ${V.h(p.sku)}</option>`).join('')}</select></label>${field('จำนวนสั่ง (ชิ้น)','quantity',line.orderedQty||1,'number','required min="1" step="1"')}${field('ทุนตกลง / ชิ้น (บาท)','agreedUnitCost',line.agreedUnitCost==null?'':POSData.money(line.agreedUnitCost),'number','required min="0" step="0.01" inputmode="decimal"')}<button type="button" class="icon-button purchase-remove" data-action="po-remove-line" aria-label="ลบรายการสินค้า">${V.icon('trash')}</button></div>`;
+  }
+  function purchaseForm(id) {
+    const state=store.getState(),po=state.purchaseOrders.find(item=>item.id===id);
+    if(po&&po.status!=='draft')throw new Error('แก้ไขได้เฉพาะ PO ฉบับร่าง');
+    if(!state.suppliers.some(item=>item.active)){supplierForm();toast('เพิ่มซัพพลายเออร์ก่อนสร้าง PO');return;}
+    poLineIndex=0;
+    const lines=po?.lines?.length?po.lines:[{}];
+    showDialog(po?'แก้ไข PO ฉบับร่าง':'สร้างใบสั่งซื้อ','PO ยังไม่เพิ่มสต๊อกหรือเปลี่ยนเงินกะ',`<input type="hidden" name="id" value="${V.h(po?.id||'')}"><label class="field"><span>ซัพพลายเออร์</span><select name="supplierId" required><option value="">เลือกซัพพลายเออร์</option>${state.suppliers.filter(item=>item.active||item.id===po?.supplierId).map(item=>`<option value="${V.h(item.id)}" ${item.id===po?.supplierId?'selected':''}>${V.h(item.name)} (${V.h(item.code)})</option>`).join('')}</select></label><div class="purchase-lines"><div class="section-heading"><h3>รายการสินค้า</h3><button type="button" class="button small" data-action="po-add-line">${V.icon('plus')}เพิ่มรายการ</button></div><div id="po-line-list">${lines.map(poLineRow).join('')}</div></div><label class="field"><span>หมายเหตุ</span><textarea name="note" maxlength="300" placeholder="เช่น ส่งสินค้ารอบเช้า">${V.h(po?.note||'')}</textarea></label>`,cancelButton+submitButton('บันทึกฉบับร่าง'),'purchase-order');
+  }
+  function purchaseDetail(id) {
+    const state=store.getState(),po=store.getPurchaseOrder(id);
+    const receipts=po.receipts.length?`<div class="purchase-detail-receipts"><h3>ประวัติใบรับของ</h3>${po.receipts.map(receipt=>`<button type="button" class="purchase-list-row" data-action="purchase-receipt-open" data-id="${V.h(receipt.id)}"><span><strong>${V.h(receipt.receiptNo)}</strong><small>${V.h(receipt.deliveryRef)} · ${V.date(receipt.receivedAt,true)}</small></span><span>${V.money(receipt.acceptedValue)} ${V.icon('chevronRight')}</span></button>`).join('')}</div>`:'';
+    const actions=po.status==='draft'?`<button type="button" class="button" data-action="purchase-edit" data-id="${V.h(id)}">แก้ไขฉบับร่าง</button><button type="button" class="button primary" data-action="purchase-issue" data-id="${V.h(id)}">ออก PO</button>`:
+      ['issued','partially_received'].includes(po.status)?`<button type="button" class="button primary" data-action="purchase-receive" data-id="${V.h(id)}">รับของ</button><button type="button" class="button" data-action="purchase-close-form" data-id="${V.h(id)}">ปิดยอดค้าง</button>`:'';
+    const cancel=po.status==='draft'||(po.status==='issued'&&!po.receipts.length)?`<button type="button" class="button danger" data-action="purchase-cancel-form" data-id="${V.h(id)}">ยกเลิก PO</button>`:'';
+    showDialog(po.poNo||'PO ฉบับร่าง',`${po.supplierNameSnapshot} · ${po.lines.length} รายการ`,`<div class="purchase-document">${V.purchaseOrderDocument(po,state)}</div>${receipts}`,`<button type="button" class="button" data-action="purchase-print-po" data-id="${V.h(id)}">${V.icon('printer')}พิมพ์</button>${cancel}${actions}<button type="button" class="button" data-action="dialog-close">ปิด</button>`);
+  }
+  function purchaseCloseForm(id,mode) {
+    const po=store.getPurchaseOrder(id);
+    showDialog(mode==='cancel'?'ยกเลิก PO':'ปิดยอดค้าง',po.poNo||'PO ฉบับร่าง',`<input type="hidden" name="poId" value="${V.h(id)}"><input type="hidden" name="mode" value="${mode}"><p class="dialog-subtext">${mode==='cancel'?'ยกเลิกได้เมื่อยังไม่มีใบรับของ':'รับสินค้าเพิ่มไม่ได้หลังปิดยอดค้าง'} ประวัติเดิมยังดูได้</p><label class="field"><span>เหตุผล</span><textarea name="reason" required maxlength="300"></textarea></label>`,cancelButton+submitButton(mode==='cancel'?'ยืนยันยกเลิก':'ยืนยันปิดยอดค้าง'),'purchase-close');
+  }
+  function goodsReceiptForm(id) {
+    if(store.getPendingGoodsReceipt())throw new Error('ตรวจผลใบรับเดิมก่อนเริ่มใบใหม่');
+    const po=store.getPurchaseOrder(id);
+    if(!['issued','partially_received'].includes(po.status))throw new Error('PO นี้รับสินค้าเพิ่มไม่ได้');
+    const draft=goodsReceiptDraft?.poId===id?goodsReceiptDraft:null;
+    const rows=po.lines.filter(line=>line.outstandingQty>0).map(line=>{
+      const saved=draft?.lines?.find(item=>item.poLineId===line.id);
+      return `<div class="purchase-entry purchase-receive-line" data-line-id="${V.h(line.id)}"><div class="purchase-receive-name"><strong>${V.h(line.nameSnapshot)}</strong><small>สั่ง ${V.number(line.orderedQty)} · รับแล้ว ${V.number(line.acceptedQty)} · ค้าง ${V.number(line.outstandingQty)} ชิ้น · ทุน PO ${V.money(line.agreedUnitCost)}</small></div>${field('รับเข้าสต๊อก','acceptedQty',saved?.acceptedQty??0,'number',`required min="0" max="${line.outstandingQty}" step="1"`)}${field('ปฏิเสธ/เสียหาย','rejectedQty',saved?.rejectedQty??0,'number','required min="0" step="1"')}${field('ทุนจริง/ชิ้น (บาท)','actualUnitCost',POSData.money(saved?.actualUnitCost??line.agreedUnitCost),'number','required min="0" step="0.01" inputmode="decimal"')}${field('เหตุผลถ้าทุนต่าง','varianceReason',saved?.varianceReason||'','text','maxlength="200"')}</div>`;
+    }).join('');
+    showDialog('รับสินค้าตาม PO',`${po.poNo} · ${po.supplierNameSnapshot}`,`<input type="hidden" name="poId" value="${V.h(id)}">${field('เลขเอกสารส่งของ / รหัสรับภายใน','deliveryRef',draft?.deliveryRef||'','text','required maxlength="100"',true)}<div class="purchase-lines"><h3>จำนวนจากการส่งครั้งนี้</h3>${rows}</div><div class="subtle-note">รับเข้าสต๊อกเฉพาะจำนวนที่ตรวจรับแล้ว ของปฏิเสธยังค้างรับ</div><details class="purchase-scenario"><summary>ทดลองกรณีผลตอบกลับหาย</summary><select name="simulate"><option value="none">บันทึกปกติ</option><option value="unresolved">บันทึกแล้ว แต่ผลตอบกลับหาย</option><option value="failure">จำลองบันทึกล้มเหลว</option></select></details>`,cancelButton+submitButton('ยืนยันใบรับของ'),'goods-receipt');
+  }
+  function goodsReceiptPayload(form,userId) {
+    const lines=Array.from(form.querySelectorAll('.purchase-receive-line')).map(row=>({poLineId:row.dataset.lineId,
+      acceptedQty:Number(row.querySelector('[name="acceptedQty"]').value),rejectedQty:Number(row.querySelector('[name="rejectedQty"]').value),
+      actualUnitCost:POSData.parseMoney(row.querySelector('[name="actualUnitCost"]').value),
+      varianceReason:row.querySelector('[name="varianceReason"]').value.trim()})).filter(line=>line.acceptedQty||line.rejectedQty);
+    return {userId,poId:form.elements.poId.value,deliveryRef:form.elements.deliveryRef.value.trim(),lines};
+  }
+  function goodsReceiptDocument(id) {
+    const state=store.getState(),receipt=state.goodsReceipts.find(item=>item.id===id);
+    if(!receipt)throw new Error('ไม่พบใบรับสินค้า');
+    const po=store.getPurchaseOrder(receipt.poId);
+    showDialog(receipt.receiptNo,`${po.poNo} · ${receipt.deliveryRef}`,`<div class="purchase-document">${V.goodsReceiptDocument(receipt,po,state)}</div>`,`<button type="button" class="button" data-action="purchase-print-receipt" data-id="${V.h(id)}">${V.icon('printer')}พิมพ์</button><button type="button" class="button primary" data-action="purchase-open" data-id="${V.h(po.id)}">ดู PO</button><button type="button" class="button" data-action="dialog-close">ปิด</button>`);
+  }
+  function recoverGoodsReceipt() {
+    const receipt=store.recoverGoodsReceipt();
+    if(!receipt){toast('ไม่พบใบรับที่ต้องตรวจสอบ');return;}
+    clearGoodsReceiptDraft();render();goodsReceiptDocument(receipt.id);toast('พบใบรับเดิมแล้ว ไม่มีการเพิ่มสต๊อกซ้ำ');
+  }
   function openShift(){const current=V.shift(store.getState());if(current){toast('มีกะเปิดอยู่แล้ว');return;}showDialog('เปิดกะใหม่','นับเงินทอนตั้งต้นก่อนเริ่มขาย',`<div class="inline-info">หลังเปิดกะ รายการขายและเงินสดทั้งหมดจะถูกบันทึกอยู่ในกะนี้</div>${field('เงินทอนตั้งต้น (บาท)','opening','1000.00','number','required min="0" step="0.01" inputmode="decimal"')}`,cancelButton+submitButton('เปิดกะ','clock'),'open-shift');}
   function closeShift(){const state=store.getState();const current=V.shift(state);if(!current)throw new Error('ไม่มีกะที่เปิดอยู่');const s=store.shiftSummary(current.id);showDialog('นับเงินและปิดกะ','ปิดกะแล้วจะขายหรือยกเลิกบิลในกะนี้ต่อไม่ได้',`<div class="payment-total"><span>เงินสดที่ควรมี</span><strong>${V.money(s.expected)}</strong></div>${field('เงินสดที่นับได้จริง (บาท)','counted','','number','id="counted-cash" required min="0" step="0.01" inputmode="decimal"')}<div class="change-preview"><span>เงินเกิน / ขาด</span><strong id="cash-difference">—</strong></div><label class="checkbox-field"><input type="checkbox" name="confirmed" required><span>นับเงินครบแล้ว และยืนยันปิดกะนี้</span></label>`,cancelButton+submitButton('ยืนยันปิดกะ','lock'),'close-shift');}
   function cashMovement(kind){if(!V.shift(store.getState()))throw new Error('เปิดกะก่อนบันทึกเงินเข้า–ออก');showDialog(kind==='in'?'นำเงินเข้าลิ้นชัก':'นำเงินออกจากลิ้นชัก','รายการนี้จะเปลี่ยนยอดเงินสดในกะ แต่ไม่เปลี่ยนยอดขาย',`<input type="hidden" name="kind" value="${kind}"><div class="form-grid">${field('จำนวนเงิน (บาท)','amount','','number','required min="0.01" step="0.01" inputmode="decimal"',true)}<label class="field full"><span>เหตุผล</span><textarea name="reason" required maxlength="300" placeholder="เช่น เพิ่มเงินทอน หรือนำเงินเก็บเข้าตู้เซฟ"></textarea></label></div>`,cancelButton+submitButton('บันทึกรายการ','cash'),'cash');}
   function voidForm(id){const state=store.getState();const sale=state.sales.find(s=>s.id===id);if(!sale)return;showDialog('ยกเลิกทั้งบิล',`${V.shortBill(sale)} · ยอด ${V.money(sale.total)}`,`<input type="hidden" name="saleId" value="${V.h(id)}"><div class="inline-info">การยกเลิกจะคืนยอดสินค้าและกลับยอดเงินสดในข้อมูล กรุณาคืนเงินและตรวจสินค้าจริงให้ครบก่อนยืนยัน</div><label class="field"><span>เหตุผลที่ยกเลิกบิล</span><textarea name="reason" required maxlength="300" placeholder="ระบุเหตุผลให้ตรวจย้อนหลังได้"></textarea></label><label class="checkbox-field"><input type="checkbox" name="cashReturned" required><span>คืนเงินสดครบ ${V.money(sale.total)} ให้ลูกค้าแล้ว</span></label><label class="checkbox-field"><input type="checkbox" name="goodsReturned" required><span>ได้รับสินค้ากลับมาครบในสภาพจำหน่ายได้ หรือยังไม่ได้ส่งมอบสินค้า</span></label>`,cancelButton+'<button type="submit" class="button danger" id="dialog-submit">ยืนยันยกเลิกทั้งบิล</button>','void');}
   function userForm(id){const u=store.getState().users.find(u=>u.id===id);showDialog(u?'แก้ไขพนักงาน':'เพิ่มพนักงานขาย','พนักงานขายมีสิทธิ์เปิด–ปิดกะ ขายสินค้า และดูบิล',`<input type="hidden" name="id" value="${V.h(u?.id||'')}"><div class="form-grid">${field('ชื่อที่แสดง','name',u?.name||'','text','required maxlength="60"',true)}${field('ชื่อบัญชี','username',u?.username||'','text','required pattern="[A-Za-z0-9_.-]+" maxlength="40" placeholder="เช่น cashier02"',true)}<label class="field full"><span>สถานะบัญชี</span><select name="active"><option value="true" ${!u||u.active?'selected':''}>เปิดใช้งาน</option><option value="false" ${u&&!u.active?'selected':''}>ปิดบัญชี</option></select></label></div><div class="subtle-note">${V.icon('info')}บัญชีใน mockup ใช้สลับบทบาทสำหรับทดลอง ไม่มีการเก็บรหัสผ่านจริง</div>`,cancelButton+submitButton('บันทึกพนักงาน'),'user');}
-  function profile(){const state=store.getState();if(state.pendingCheckout||state.pendingReturn)throw new Error('ตรวจสอบรายการที่ยังไม่ทราบผลก่อนเปลี่ยนผู้ใช้งาน');showDialog('เลือกผู้ใช้งานตัวอย่าง','ลองมุมมองเจ้าของร้านและพนักงานขาย',`<div class="role-selection">${state.users.filter(u=>u.active).map(u=>`<button type="button" class="role-option ${u.id===state.currentUserId?'active':''}" data-action="switch-user" data-id="${V.h(u.id)}"><span class="avatar">${V.h(u.name.slice(0,1))}</span><span class="role-text"><strong>${V.h(u.name)}</strong><small>${u.role==='owner'?'เจ้าของร้าน · จัดการได้ทุกส่วน':'พนักงานขาย · ขายสินค้าและจัดการกะ'}</small></span>${u.id===state.currentUserId?V.icon('check'):V.icon('chevronRight')}</button>`).join('')}</div>`);}
+  function profile(){const state=store.getState();if(state.pendingCheckout||state.pendingReturn||state.pendingGoodsReceipt)throw new Error('ตรวจสอบรายการที่ยังไม่ทราบผลก่อนเปลี่ยนผู้ใช้งาน');showDialog('เลือกผู้ใช้งานตัวอย่าง','ลองมุมมองเจ้าของร้านและพนักงานขาย',`<div class="role-selection">${state.users.filter(u=>u.active).map(u=>`<button type="button" class="role-option ${u.id===state.currentUserId?'active':''}" data-action="switch-user" data-id="${V.h(u.id)}"><span class="avatar">${V.h(u.name.slice(0,1))}</span><span class="role-text"><strong>${V.h(u.name)}</strong><small>${u.role==='owner'?'เจ้าของร้าน · จัดการได้ทุกส่วน':'พนักงานขาย · ขายสินค้าและจัดการกะ'}</small></span>${u.id===state.currentUserId?V.icon('check'):V.icon('chevronRight')}</button>`).join('')}</div>`);}
   function confirmDialog(title,subtitle,action,label='ยืนยัน'){showDialog(title,'',`<p class="dialog-subtext">${V.h(subtitle)}</p>`,cancelButton+`<button type="button" class="button primary" data-action="${action}">${V.h(label)}</button>`);}
   function download(filename,text,type){const blob=new Blob([text],{type});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function exportReport(){
@@ -178,6 +248,19 @@
     'cash-preset':el=>{const input=document.getElementById('cash-tendered');input.value=(Number(el.dataset.amount)/100).toFixed(2);updateChange();input.focus();},
     'accept-prices':()=>{const state=store.getState();saveDraft(cart.map(i=>({...i,unitPrice:state.products.find(p=>p.id===i.productId)?.price??i.unitPrice})));render();openCheckout();},
     'new-product':()=>productForm(), 'edit-product':el=>productForm(el.dataset.id), stock:el=>stockForm(el.dataset.id), 'stock-history':el=>stockHistory(el.dataset.id),
+    'supplier-new':()=>supplierForm(),'supplier-edit':el=>supplierForm(el.dataset.id),
+    'purchase-new':()=>purchaseForm(),'purchase-edit':el=>purchaseForm(el.dataset.id),'purchase-open':el=>purchaseDetail(el.dataset.id),
+    'po-add-line':()=>document.getElementById('po-line-list')?.insertAdjacentHTML('beforeend',poLineRow()),
+    'po-remove-line':el=>{const rows=document.querySelectorAll('.po-entry');if(rows.length>1)el.closest('.po-entry')?.remove();else toast('PO ต้องมีสินค้าอย่างน้อยหนึ่งรายการ',true);},
+    'purchase-issue':el=>{const id=el.dataset.id;store.issuePurchaseOrder({key:uuid(),userId:getContext().user.id,poId:id});render();purchaseDetail(id);toast('ออก PO แล้ว สต๊อกยังไม่เปลี่ยน');},
+    'purchase-cancel-form':el=>purchaseCloseForm(el.dataset.id,'cancel'),
+    'purchase-close-form':el=>purchaseCloseForm(el.dataset.id,'close'),
+    'purchase-receive':el=>goodsReceiptForm(el.dataset.id),
+    'purchase-receipt-open':el=>goodsReceiptDocument(el.dataset.id),
+    'purchase-recover':recoverGoodsReceipt,
+    'purchase-report-all':()=>{purchasingDate='';render();},
+    'purchase-print-po':el=>{const state=store.getState(),po=store.getPurchaseOrder(el.dataset.id);document.getElementById('print-area').innerHTML=V.purchaseOrderDocument(po,state);window.print();},
+    'purchase-print-receipt':el=>{const state=store.getState(),receipt=state.goodsReceipts.find(item=>item.id===el.dataset.id);if(!receipt)return;document.getElementById('print-area').innerHTML=V.goodsReceiptDocument(receipt,store.getPurchaseOrder(receipt.poId),state);window.print();},
     receipt:el=>receipt(el.dataset.id),void:el=>voidForm(el.dataset.id),
     'return-open':el=>returnForm(el.dataset.id),
     'return-document':el=>returnDocument(el.dataset.id),
@@ -194,7 +277,7 @@
     'export-data':()=>{download(`baandee-demo-${V.dayKey()}.json`,JSON.stringify(store.getState(),null,2),'application/json');toast('ส่งออกข้อมูลตัวอย่างแล้ว');},
     'restore-info':()=>showDialog('การกู้คืนข้อมูล','ขั้นตอนสำหรับเจ้าของร้านและผู้ดูแล',`<div class="dialog-subtext"><p>ในระบบจริงต้องหยุดขายและเข้าสู่ <strong>โหมดบำรุงรักษา</strong> ก่อนกู้คืน</p><ol><li>เก็บสำเนาข้อมูลเดิม และเลือก backup ที่ตรวจสอบได้</li><li>ตรวจ checksum และเวอร์ชันข้อมูล แล้วกู้ลงตำแหน่งสะอาด</li><li>ตรวจจำนวนบิล ยอดเงิน กะ และข้อมูลล่าสุดให้ตรงกับจุดสำรอง</li><li>ล็อกอินใหม่ กระทบยอดเงินจริง แล้วจึงกลับมาขาย</li></ol><p>mockup นี้ไม่มีฐานข้อมูล SQLite หรือการกู้คืนข้อมูลร้านจริง ปุ่มส่งออกเก็บเฉพาะข้อมูลตัวอย่างจากเบราว์เซอร์</p></div>`,'<button type="button" class="button primary" data-action="dialog-close">เข้าใจแล้ว</button>'),
     'reset-demo':()=>confirmDialog('เริ่มข้อมูลตัวอย่างใหม่?','รายการที่คุณลองขาย ปรับสต๊อก และจัดการกะใน mockup จะถูกแทนที่ด้วยข้อมูลเริ่มต้น','confirm-reset','เริ่มใหม่'),
-    'confirm-reset':()=>{store.reset();saveDraft([]);clearReturnDraft();scenario='none';category='ทั้งหมด';query='';catalogPage=0;reportShift='';closeDialog();render();toast('เริ่มข้อมูลตัวอย่างใหม่แล้ว');},
+    'confirm-reset':()=>{store.reset();saveDraft([]);clearReturnDraft();clearGoodsReceiptDraft();scenario='none';category='ทั้งหมด';query='';catalogPage=0;reportShift='';closeDialog();render();toast('เริ่มข้อมูลตัวอย่างใหม่แล้ว');},
     'export-report':exportReport,
     'dialog-close':closeDialog
   };
@@ -205,11 +288,12 @@
     else if(el.id==='inventory-search'){inventoryQuery=el.value;render();}
     else if(el.id==='history-search'){historyQuery=el.value;render();}
     else if(el.id==='return-search'){returnQuery=el.value;render();}
+    else if(el.id==='purchasing-search'){purchasingQuery=el.value;render();}
     else if(el.closest('form[data-form="return"]')){const form=el.closest('form');saveReturnDraft(returnPayload(form));updateReturnPreview(form);}
     else if(el.id==='cash-tendered')updateChange();
     else if(el.id==='counted-cash'){let value;try{value=POSData.parseMoney(el.value)}catch(_){value=null}const current=V.shift(store.getState());const diff=value===null?null:value-store.shiftSummary(current.id).expected;const output=document.getElementById('cash-difference');output.textContent=diff===null?'—':(diff>0?'+':'')+V.money(diff);output.className=diff<0?'text-red':diff>0?'text-amber':'text-green';}
   });
-  document.addEventListener('change',event=>{const el=event.target;if(el.id==='history-date'){historyDate=el.value;render();}else if(el.id==='history-status'){historyStatus=el.value;render();}else if(el.id==='report-date'){if(!el.value){el.value=reportDate;toast('กรุณาเลือกวันที่สำหรับรายงาน',true);return;}reportDate=el.value;reportShift='';render();}else if(el.id==='report-shift'){reportShift=el.value;render();}else if(el.id==='checkout-scenario'){scenario=el.value;toast('ตั้งค่าสถานการณ์ตัวอย่างแล้ว');}else if(el.closest('form[data-form="return"]')){const form=el.closest('form');saveReturnDraft(returnPayload(form));updateReturnPreview(form);}});
+  document.addEventListener('change',event=>{const el=event.target;if(el.id==='history-date'){historyDate=el.value;render();}else if(el.id==='history-status'){historyStatus=el.value;render();}else if(el.id==='purchasing-supplier'){purchasingSupplier=el.value;render();}else if(el.id==='purchase-report-product'){purchasingProduct=el.value;render();}else if(el.id==='purchase-report-date'){purchasingDate=el.value;render();}else if(el.id==='report-date'){if(!el.value){el.value=reportDate;toast('กรุณาเลือกวันที่สำหรับรายงาน',true);return;}reportDate=el.value;reportShift='';render();}else if(el.id==='report-shift'){reportShift=el.value;render();}else if(el.id==='checkout-scenario'){scenario=el.value;toast('ตั้งค่าสถานการณ์ตัวอย่างแล้ว');}else if(el.closest('form[data-form="return"]')){const form=el.closest('form');saveReturnDraft(returnPayload(form));updateReturnPreview(form);}});
   document.addEventListener('keydown',event=>{
     if(event.key==='F2'&&!dialog.open){event.preventDefault();if(page!=='sales'){location.hash='sales';setTimeout(()=>document.getElementById('product-search')?.focus(),0)}else document.getElementById('product-search')?.focus();}
     if(event.key==='F8'&&!dialog.open){event.preventDefault();try{openCheckout()}catch(error){toast(error.message,true)}}
@@ -243,6 +327,32 @@
           store.saveProduct(product,user.id);closeDialog();render();toast('บันทึกสินค้าแล้ว');break;
         }
         case 'stock':store.adjustStock({key:uuid(),productId:value('productId'),kind:value('kind'),quantity:Number(value('quantity')),reason:value('reason'),userId:user.id});closeDialog();render();toast('บันทึกสต๊อกและประวัติแล้ว');break;
+        case 'supplier':{
+          store.saveSupplier({...(value('id')?{id:value('id')}:{}),code:value('code'),name:value('name'),contact:value('contact'),active:value('active')==='true'},user.id);
+          closeDialog();render();toast('บันทึกซัพพลายเออร์แล้ว');break;
+        }
+        case 'purchase-order':{
+          const lines=Array.from(form.querySelectorAll('.po-entry')).map(row=>({productId:row.querySelector('[name="productId"]').value,
+            quantity:Number(row.querySelector('[name="quantity"]').value),agreedUnitCost:POSData.parseMoney(row.querySelector('[name="agreedUnitCost"]').value)}));
+          const po=store.savePurchaseOrder({key:uuid(),userId:user.id,...(value('id')?{id:value('id')}:{}),supplierId:value('supplierId'),lines,note:value('note')});
+          closeDialog();render();purchaseDetail(po.id);toast('บันทึก PO ฉบับร่างแล้ว');break;
+        }
+        case 'purchase-close':{
+          const id=value('poId');
+          if(value('mode')==='cancel')store.cancelPurchaseOrder({key:uuid(),userId:user.id,poId:id,reason:value('reason')});
+          else store.closePurchaseOrder({key:uuid(),userId:user.id,poId:id,reason:value('reason')});
+          closeDialog();render();purchaseDetail(id);toast('อัปเดตสถานะ PO แล้ว');break;
+        }
+        case 'goods-receipt':{
+          const payload=saveGoodsReceiptDraft(goodsReceiptPayload(form,user.id));
+          busy=true;const button=document.getElementById('dialog-submit');button.disabled=true;button.innerHTML='<span class="loading-spinner"></span>กำลังบันทึก…';
+          await new Promise(resolve=>setTimeout(resolve,350));
+          const result=store.receivePurchaseOrder({...payload,simulate:value('simulate')});
+          busy=false;
+          if(result.unresolved){closeDialog();render();showDialog('ยังไม่ทราบผลใบรับ','ตรวจเอกสารเดิมก่อนรับสินค้าอีกครั้ง','<div class="inline-info">ระบบจำลองว่าบันทึกใบรับแล้ว แต่ผลตอบกลับหาย การตรวจสอบจะเปิดใบรับเดิมโดยไม่เพิ่มสต๊อกซ้ำ</div>','<button type="button" class="button primary" data-action="purchase-recover">ตรวจสอบใบรับเดิม</button>');}
+          else{clearGoodsReceiptDraft();closeDialog();render();goodsReceiptDocument(result.receipt.id);}
+          return;
+        }
         case 'open-shift':store.openShift({key:uuid(),opening:POSData.parseMoney(value('opening')),userId:user.id});closeDialog();render();toast('เปิดกะแล้ว พร้อมเริ่มขาย');break;
         case 'close-shift':{const closed=store.closeShift({key:uuid(),counted:POSData.parseMoney(value('counted')),userId:user.id});closeDialog();render();toast('ปิดกะและบันทึกยอดนับจริงแล้ว');break;}
         case 'cash':store.addCashMovement({key:uuid(),kind:value('kind'),amount:POSData.parseMoney(value('amount')),reason:value('reason'),userId:user.id});closeDialog();render();toast('บันทึกเงิน'+(value('kind')==='in'?'นำเข้า':'นำออก')+'แล้ว');break;
@@ -259,7 +369,7 @@
         }
         case 'user':{const id=value('id');store.saveUser({...(id?{id}:{}),name:value('name'),username:value('username'),role:'cashier',active:value('active')==='true'},user.id);closeDialog();render();toast('บันทึกพนักงานแล้ว');break;}
       }
-    }catch(error){busy=false;if(error.code==='PRICE_CHANGED'){priceChanged();return;}showError(error);const button=document.getElementById('dialog-submit');if(button&&form.dataset.form==='checkout'){button.disabled=false;button.innerHTML=V.icon('check')+'ยืนยันการขาย';updateChange();}else if(button&&form.dataset.form==='return'){button.disabled=false;button.innerHTML=V.icon('refresh')+'ยืนยันคืนเงินสด';}}
+    }catch(error){busy=false;if(error.code==='PRICE_CHANGED'){priceChanged();return;}showError(error);const button=document.getElementById('dialog-submit');if(button&&form.dataset.form==='checkout'){button.disabled=false;button.innerHTML=V.icon('check')+'ยืนยันการขาย';updateChange();}else if(button&&form.dataset.form==='return'){button.disabled=false;button.innerHTML=V.icon('refresh')+'ยืนยันคืนเงินสด';}else if(button&&form.dataset.form==='goods-receipt'){button.disabled=false;button.innerHTML=V.icon('check')+'ยืนยันใบรับของ';}}
   });
   document.querySelector('.skip-link')?.addEventListener('click',event=>{event.preventDefault();document.getElementById('page-content')?.focus({preventScroll:false});});
   function navigate(){const next=location.hash.slice(1);if(next==='page-content'){document.getElementById('page-content')?.focus();return;}page=Object.hasOwn(V.pages,next)?next:store.getPendingReturn()?'returns':'sales';render();window.scrollTo({top:0});}

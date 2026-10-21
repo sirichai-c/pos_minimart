@@ -73,11 +73,12 @@
     ];
     const products = catalog.map(([id,name,sku,barcode,price,stock,category,image]) => ({id,name,sku,barcode,price,stock,category,image,active:true}));
     const shift = { id: uuid(), openedAt: timestamp(180), closedAt: null, opening: 100000, userId: 'owner' };
-    const state = { version: 2, products, users: [
+    const state = { version: 3, products, users: [
       { id:'owner', name:'พิมพ์ · เจ้าของร้าน', username:'owner', role:'owner', active:true },
       { id:'cashier', name:'เมย์ · พนักงานขาย', username:'cashier', role:'cashier', active:true }
     ], currentUserId:'owner', shifts:[shift], activeShiftId:shift.id, sales:[], returns:[], cashRefunds:[], stockMovements:[], cashMovements:[],
-      audit:[], backup:{lastSnapshot:null,lastUpload:null,pending:0,history:[]}, online:true, pendingCheckout:null, pendingReturn:null, requests:{} };
+      audit:[], backup:{lastSnapshot:null,lastUpload:null,pending:0,history:[]}, online:true, pendingCheckout:null, pendingReturn:null,
+      suppliers:[], purchaseOrders:[], goodsReceipts:[], pendingGoodsReceipt:null, requests:{} };
     products.forEach(p => state.stockMovements.push({id:uuid(),productId:p.id,kind:'initial',quantity:p.stock,balance:p.stock,reason:'ยอดตั้งต้นร้านตัวอย่าง',createdAt:timestamp(181),userId:'owner',reference:'demo-opening'}));
     const baskets = [[['water',2],['bread',1]],[['coffee',1],['noodles',3]],[['milk',2],['snack',1]],[['rice',1],['fish',2]]];
     baskets.forEach((basket,index) => {
@@ -115,23 +116,30 @@
       let loaded;
       try {
         loaded = JSON.parse(saved);
-        if (![1,2].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
+        if (![1,2,3].includes(loaded.version) || !Array.isArray(loaded.products) || !Array.isArray(loaded.sales) || !loaded.requests || typeof loaded.requests!=='object' || Array.isArray(loaded.requests) || !Array.isArray(loaded.users) || !Array.isArray(loaded.shifts) || !Array.isArray(loaded.stockMovements) || !Array.isArray(loaded.cashMovements)) throw new Error();
         if (loaded.sales.some(sale=>typeof sale.id!=='string'||!Array.isArray(sale.items)||sale.items.some(line=>typeof line.productId!=='string'||!Number.isSafeInteger(line.quantity)||!Number.isSafeInteger(line.unitPrice)))) throw new Error();
         if (loaded.version === 2 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds))) throw new Error();
+        if (loaded.version === 3 && (!Array.isArray(loaded.returns) || !Array.isArray(loaded.cashRefunds) || !Array.isArray(loaded.suppliers) || !Array.isArray(loaded.purchaseOrders) || !Array.isArray(loaded.goodsReceipts))) throw new Error();
       } catch (_) { error('STORAGE_INVALID','ข้อมูลตัวอย่างที่บันทึกไว้ไม่ถูกต้อง กรุณาตรวจข้อมูลก่อนล้างข้อมูลตัวอย่าง'); }
-      if (loaded.version === 1) {
+      if (loaded.version < 3) {
         const migrated = clone(loaded);
-        migrated.version = 2;
-        migrated.sales.forEach(sale => sale.items.forEach((line,index) => { if (!line.id) line.id = sale.id + '-line-' + (index + 1); }));
-        migrated.shifts.forEach(shift=>{if(shift.summary){shift.summary.refunds??=0;shift.summary.returnCount??=0;}});
-        Object.values(migrated.requests).forEach(entry=>{
-          if(entry?.action!=='checkout'||!entry.result?.id)return;
-          const sale=migrated.sales.find(item=>item.id===entry.result.id);
-          if(sale)entry.result=clone(sale);
-        });
-        migrated.returns = [];
-        migrated.cashRefunds = [];
-        migrated.pendingReturn = null;
+        if (loaded.version === 1) {
+          migrated.sales.forEach(sale => sale.items.forEach((line,index) => { if (!line.id) line.id = sale.id + '-line-' + (index + 1); }));
+          migrated.shifts.forEach(shift=>{if(shift.summary){shift.summary.refunds??=0;shift.summary.returnCount??=0;}});
+          Object.values(migrated.requests).forEach(entry=>{
+            if(entry?.action!=='checkout'||!entry.result?.id)return;
+            const sale=migrated.sales.find(item=>item.id===entry.result.id);
+            if(sale)entry.result=clone(sale);
+          });
+          migrated.returns = [];
+          migrated.cashRefunds = [];
+          migrated.pendingReturn = null;
+        }
+        migrated.version = 3;
+        migrated.suppliers = [];
+        migrated.purchaseOrders = [];
+        migrated.goodsReceipts = [];
+        migrated.pendingGoodsReceipt = null;
         // Keep the old key and only replace it after the entire migration can be written.
         persist(migrated);
       } else state = loaded;
@@ -200,12 +208,26 @@
       result.expected=safe(safe(safe(result.opening+result.net)+result.cashIn)-result.cashOut);
       return result;
     }
+    function purchaseDetails(s, po) {
+      if (!po) error('PO_NOT_FOUND','ไม่พบใบสั่งซื้อ');
+      const receipts=s.goodsReceipts.filter(receipt=>receipt.poId===po.id);
+      const lines=po.lines.map(line=>{
+        const entries=receipts.flatMap(receipt=>receipt.lines.filter(item=>item.poLineId===line.id));
+        const acceptedQty=entries.reduce((sum,item)=>safe(sum+item.acceptedQty),0);
+        const rejectedQty=entries.reduce((sum,item)=>safe(sum+item.rejectedQty),0);
+        return {...clone(line),acceptedQty,rejectedQty,outstandingQty:safe(line.orderedQty-acceptedQty)};
+      });
+      return {...clone(po),lines,receipts:clone(receipts),orderedValue:lines.reduce((sum,line)=>safe(sum+safe(line.orderedQty*line.agreedUnitCost)),0),
+        acceptedValue:receipts.reduce((sum,receipt)=>safe(sum+receipt.acceptedValue),0)};
+    }
     return {
       getState: () => clone(state),
       getPendingCheckout: () => clone(state.pendingCheckout),
       getPendingReturn: () => clone(state.pendingReturn),
+      getPendingGoodsReceipt: () => clone(state.pendingGoodsReceipt),
+      getPurchaseOrder(poId) { return purchaseDetails(state,state.purchaseOrders.find(po=>po.id===poId)); },
       getReturnable(saleId) { return clone(returnable(state,saleId)); },
-      setUser(userId) { user(state,userId); if(state.pendingCheckout||state.pendingReturn)error('RECOVERY_REQUIRED','กรุณาตรวจผลรายการที่ยังไม่ทราบก่อนเปลี่ยนผู้ใช้'); return transaction(s=>{s.currentUserId=userId;return s.users.find(u=>u.id===userId);}); },
+      setUser(userId) { user(state,userId); if(state.pendingCheckout||state.pendingReturn||state.pendingGoodsReceipt)error('RECOVERY_REQUIRED','กรุณาตรวจผลรายการที่ยังไม่ทราบก่อนเปลี่ยนผู้ใช้'); return transaction(s=>{s.currentUserId=userId;return s.users.find(u=>u.id===userId);}); },
       reset() { const next=seed();persist(next);return clone(next); },
       checkout(args) {
         const actor=user(state,args.userId);
@@ -308,6 +330,143 @@
         if(!entry)error('RECOVERY_FAILED','ยังไม่พบผลรายการคืนเดิม กรุณาตรวจข้อมูลก่อนจ่ายเงินซ้ำ');
         return transaction(s=>{s.pendingReturn=null;return entry;});
       },
+      saveSupplier(input, actorId) {
+        const actor=user(state,actorId,true);
+        return transaction(s=>{
+          const existing=input.id?s.suppliers.find(item=>item.id===input.id):null;
+          if(input.id&&!existing)error('SUPPLIER_NOT_FOUND','ไม่พบซัพพลายเออร์');
+          const code=text(input.code,'รหัสซัพพลายเออร์').toUpperCase();
+          const name=text(input.name,'ชื่อซัพพลายเออร์');
+          if(s.suppliers.some(item=>item.id!==input.id&&item.code===code))error('DUPLICATE_SUPPLIER_CODE','รหัสซัพพลายเออร์ซ้ำ');
+          if(input.contact!=null&&typeof input.contact!=='string')error('INVALID_CONTACT','ข้อมูลติดต่อไม่ถูกต้อง');
+          if(input.active!==undefined&&typeof input.active!=='boolean')error('INVALID_STATUS','สถานะซัพพลายเออร์ไม่ถูกต้อง');
+          const updated={id:existing?.id||uuid(),code,name,contact:(input.contact||'').trim(),active:input.active!==false,
+            createdAt:existing?.createdAt||now(),updatedAt:now()};
+          if(existing)Object.assign(existing,updated);else s.suppliers.push(updated);
+          audit(s,existing?'SUPPLIER_UPDATED':'SUPPLIER_CREATED',code+' · '+name,actor.id);
+          return updated;
+        });
+      },
+      savePurchaseOrder(args) { return request('purchaseOrderSave',args,(s,userId)=>{
+        const existing=args.id?s.purchaseOrders.find(po=>po.id===args.id):null;
+        if(args.id&&!existing)error('PO_NOT_FOUND','ไม่พบใบสั่งซื้อ');
+        if(existing&&existing.status!=='draft')error('PO_NOT_DRAFT','แก้ไขได้เฉพาะใบสั่งซื้อฉบับร่าง');
+        const supplier=s.suppliers.find(item=>item.id===args.supplierId&&item.active);
+        if(!supplier)error('SUPPLIER_UNAVAILABLE','ซัพพลายเออร์ไม่พร้อมใช้งาน');
+        if(!Array.isArray(args.lines)||!args.lines.length)error('EMPTY_PO','กรุณาเลือกสินค้าอย่างน้อยหนึ่งรายการ');
+        const seen=new Set();
+        const lines=args.lines.map(input=>{
+          const product=s.products.find(item=>item.id===input.productId&&item.active);
+          if(!product)error('PRODUCT_UNAVAILABLE','สินค้าไม่พร้อมสั่งซื้อ');
+          if(seen.has(product.id))error('DUPLICATE_PO_LINE','สินค้าใน PO ซ้ำกัน');
+          seen.add(product.id);
+          const orderedQty=integer(input.quantity,'จำนวนสั่ง',1);
+          const agreedUnitCost=integer(input.agreedUnitCost,'ราคาทุน');
+          safe(orderedQty*agreedUnitCost);
+          return {id:uuid(),productId:product.id,skuSnapshot:product.sku,nameSnapshot:product.name,orderedQty,agreedUnitCost};
+        });
+        lines.reduce((sum,line)=>safe(sum+safe(line.orderedQty*line.agreedUnitCost)),0);
+        if(args.note!=null&&typeof args.note!=='string')error('INVALID_NOTE','หมายเหตุไม่ถูกต้อง');
+        const po=existing||{id:uuid(),poNo:null,status:'draft',createdAt:now(),createdBy:userId};
+        Object.assign(po,{supplierId:supplier.id,supplierNameSnapshot:supplier.name,lines,note:(args.note||'').trim(),updatedAt:now()});
+        if(!existing)s.purchaseOrders.push(po);
+        audit(s,existing?'PO_DRAFT_UPDATED':'PO_DRAFT_CREATED','ใบสั่งซื้อฉบับร่าง · '+supplier.name,userId);
+        return po;
+      },true); },
+      issuePurchaseOrder(args) { return request('purchaseOrderIssue',args,(s,userId)=>{
+        const po=s.purchaseOrders.find(item=>item.id===args.poId);
+        if(!po)error('PO_NOT_FOUND','ไม่พบใบสั่งซื้อ');
+        if(po.status!=='draft')error('PO_NOT_DRAFT','ออกเอกสารได้เฉพาะฉบับร่าง');
+        const supplier=s.suppliers.find(item=>item.id===po.supplierId&&item.active);
+        if(!supplier)error('SUPPLIER_UNAVAILABLE','ซัพพลายเออร์ไม่พร้อมใช้งาน');
+        po.lines.forEach(line=>{
+          const product=s.products.find(item=>item.id===line.productId);
+          if(!product)error('PRODUCT_NOT_FOUND','ไม่พบสินค้าในใบสั่งซื้อ');
+          line.skuSnapshot=product.sku;line.nameSnapshot=product.name;
+        });
+        po.poNo='PO1-'+po.id.replace(/-/g,'');po.supplierNameSnapshot=supplier.name;
+        po.status='issued';po.issuedAt=now();po.issuedBy=userId;
+        audit(s,'PO_ISSUED','ออกใบสั่งซื้อ '+po.poNo,userId);
+        return po;
+      },true); },
+      cancelPurchaseOrder(args) { return request('purchaseOrderCancel',args,(s,userId)=>{
+        const po=s.purchaseOrders.find(item=>item.id===args.poId);
+        if(!po)error('PO_NOT_FOUND','ไม่พบใบสั่งซื้อ');
+        if(s.goodsReceipts.some(receipt=>receipt.poId===po.id))error('PO_HAS_RECEIPTS','มีใบรับของแล้ว ยกเลิกใบสั่งซื้อไม่ได้');
+        if(!['draft','issued'].includes(po.status))error('PO_CLOSED','ใบสั่งซื้อนี้ปิดแล้ว');
+        po.closeReason=text(args.reason,'เหตุผลยกเลิก');po.status='cancelled';po.closedAt=now();po.closedBy=userId;
+        audit(s,'PO_CANCELLED','ยกเลิก '+(po.poNo||po.id)+' · '+po.closeReason,userId);
+        return po;
+      },true); },
+      closePurchaseOrder(args) { return request('purchaseOrderClose',args,(s,userId)=>{
+        const po=s.purchaseOrders.find(item=>item.id===args.poId);
+        if(!po)error('PO_NOT_FOUND','ไม่พบใบสั่งซื้อ');
+        if(!['issued','partially_received'].includes(po.status))error('PO_CLOSED','ใบสั่งซื้อนี้ปิดแล้วหรือยังไม่ออกเอกสาร');
+        if(purchaseDetails(s,po).lines.every(line=>line.outstandingQty===0))error('PO_FULLY_RECEIVED','ใบสั่งซื้อรับครบแล้ว');
+        po.closeReason=text(args.reason,'เหตุผลปิดยอดค้าง');po.status='closed_short';po.closedAt=now();po.closedBy=userId;
+        audit(s,'PO_CLOSED_SHORT','ปิดยอดค้าง '+po.poNo+' · '+po.closeReason,userId);
+        return po;
+      },true); },
+      receivePurchaseOrder(args) {
+        const actor=user(state,args.userId,true);
+        const simulation=args.simulate||'none';
+        if(!['none','unresolved','failure'].includes(simulation))error('INVALID_SIMULATION','รูปแบบทดสอบไม่ถูกต้อง');
+        const requestArgs={key:args.key,userId:actor.id,poId:args.poId,deliveryRef:args.deliveryRef,lines:args.lines};
+        const previous=state.requests['request:'+text(args.key,'รหัสคำขอ')];
+        if(previous)return {receipt:request('goodsReceipt',requestArgs,()=>{},true)};
+        if(state.pendingGoodsReceipt)error('RECEIPT_UNRESOLVED','กรุณาตรวจใบรับของเดิมก่อนรับครั้งใหม่');
+        if(simulation==='failure')error('RECEIPT_FAILED','จำลองบันทึกใบรับไม่สำเร็จ กรุณาลองคำขอเดิม');
+        const receipt=request('goodsReceipt',requestArgs,(s,userId)=>{
+          const po=s.purchaseOrders.find(item=>item.id===args.poId);
+          if(!po)error('PO_NOT_FOUND','ไม่พบใบสั่งซื้อ');
+          if(po.status==='draft')error('PO_NOT_ISSUED','กรุณาออกใบสั่งซื้อก่อนรับของ');
+          if(!['issued','partially_received'].includes(po.status))error('PO_CLOSED','ใบสั่งซื้อนี้ปิดแล้ว');
+          const deliveryRef=text(args.deliveryRef,'เลขเอกสารส่งของ');
+          if(s.goodsReceipts.some(item=>item.poId===po.id&&item.deliveryRef.toUpperCase()===deliveryRef.toUpperCase()))
+            error('DUPLICATE_DELIVERY_REF','เลขเอกสารส่งของนี้เคยรับใน PO แล้ว');
+          if(!Array.isArray(args.lines)||!args.lines.length)error('EMPTY_RECEIPT','กรุณาระบุรายการรับของ');
+          const details=purchaseDetails(s,po),seen=new Set(),id=uuid();
+          const lines=args.lines.map(input=>{
+            const source=details.lines.find(line=>line.id===input.poLineId);
+            if(!source)error('PRODUCT_NOT_IN_PO','สินค้าไม่อยู่ใน PO');
+            if(seen.has(source.id))error('DUPLICATE_RECEIPT_LINE','สินค้าในใบรับซ้ำกัน');
+            seen.add(source.id);
+            const acceptedQty=integer(input.acceptedQty,'จำนวนรับ');
+            const rejectedQty=integer(input.rejectedQty,'จำนวนปฏิเสธ');
+            if(acceptedQty===0&&rejectedQty===0)error('EMPTY_RECEIPT_LINE','กรุณาระบุจำนวนรับหรือปฏิเสธ');
+            if(acceptedQty>source.outstandingQty)error('RECEIPT_QUANTITY_EXCEEDED','จำนวนรับเกินยอดค้างใน PO');
+            const actualUnitCost=integer(input.actualUnitCost,'ราคาทุนจริง');
+            const varianceReason=(input.varianceReason||'').trim();
+            if(actualUnitCost!==source.agreedUnitCost&&!varianceReason)error('COST_VARIANCE_REASON_REQUIRED','กรุณาระบุเหตุผลราคาทุนต่างจาก PO');
+            const acceptedValue=safe(acceptedQty*actualUnitCost);
+            return {id:uuid(),receiptId:id,poLineId:source.id,productId:source.productId,skuSnapshot:source.skuSnapshot,
+              nameSnapshot:source.nameSnapshot,acceptedQty,rejectedQty,agreedUnitCost:source.agreedUnitCost,
+              actualUnitCost,varianceReason,acceptedValue};
+          });
+          const acceptedValue=lines.reduce((sum,line)=>safe(sum+line.acceptedValue),0);
+          const entry={id,receiptNo:'GR1-'+id.replace(/-/g,''),poId:po.id,poNo:po.poNo,deliveryRef,
+            receivedAt:now(),receivedBy:userId,lines,acceptedValue};
+          s.goodsReceipts.push(entry);
+          lines.filter(line=>line.acceptedQty>0).forEach(line=>{
+            const product=s.products.find(item=>item.id===line.productId);
+            if(!product)error('PRODUCT_NOT_FOUND','ไม่พบสินค้าในใบรับ');
+            movement(s,product,'purchase_receipt',line.acceptedQty,'รับตาม '+entry.receiptNo,userId,line.id);
+          });
+          const after=purchaseDetails(s,po);
+          po.status=after.lines.every(line=>line.outstandingQty===0)?'fully_received':
+            after.lines.some(line=>line.acceptedQty>0)?'partially_received':'issued';
+          audit(s,'GOODS_RECEIPT','รับสินค้า '+entry.receiptNo+' จาก '+po.poNo,userId);
+          if(simulation==='unresolved')s.pendingGoodsReceipt={...clone(requestArgs),receiptId:id};
+          return entry;
+        },true);
+        return simulation==='unresolved'?{receipt,unresolved:true}:{receipt};
+      },
+      recoverGoodsReceipt() {
+        if(!state.pendingGoodsReceipt)return null;
+        const receipt=state.goodsReceipts.find(item=>item.id===state.pendingGoodsReceipt.receiptId);
+        if(!receipt)error('RECOVERY_FAILED','ยังไม่พบใบรับเดิม กรุณาตรวจเอกสารก่อนรับซ้ำ');
+        return transaction(s=>{s.pendingGoodsReceipt=null;return receipt;});
+      },
       saveProduct(input,userId) {
         const actor=user(state,userId,true);
         return transaction(s=>{
@@ -337,7 +496,7 @@
         integer(args.quantity,'จำนวนสินค้า',args.kind==='receive'?1:0);
         const reason=text(args.reason,'เหตุผล');
         const quantity=args.kind==='count'?args.quantity-product.stock:args.quantity;
-        const entry=movement(s,product,args.kind,quantity,reason,userId,args.key);
+        const entry=movement(s,product,args.kind==='receive'?'manual_receive':args.kind,quantity,reason,userId,args.key);
         audit(s,'STOCK_'+args.kind.toUpperCase(),product.name+' '+quantity+' · '+reason,userId);return entry;
       },true); },
       voidSale(args) { return request('void',args,(s,userId)=>{
