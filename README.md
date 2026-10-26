@@ -37,6 +37,7 @@ py -m http.server 4173 --bind 127.0.0.1 --directory mockup
 | [plan/pos-returns-refunds-spec.md](plan/pos-returns-refunds-spec.md) | กติกาคืนสินค้าและคืนเงินสด รวมเกณฑ์รับงานของโมดูลนี้ |
 | [plan/pos-purchasing-receiving-spec.md](plan/pos-purchasing-receiving-spec.md) | กติกาจัดซื้อ PO ใบรับสินค้า และยอดค้างรับ |
 | [plan/production-readiness.md](plan/production-readiness.md) | งานที่ยังต้องทำและเกณฑ์ตรวจรับก่อนใช้ POS ขายจริง |
+| [plan/implementation-plan.md](plan/implementation-plan.md) | โครงไฟล์ interfaces งานย่อย และคำสั่งตรวจรับของระบบจริง |
 | [plan/pos-stock-count-spec.md](plan/pos-stock-count-spec.md) | รอบตรวจนับ ส่งตรวจ อนุมัติส่วนต่าง และตรวจสต๊อกที่เคลื่อนไหวระหว่างนับ |
 | [plan/pos-gross-profit-spec.md](plan/pos-gross-profit-spec.md) | กติกาต้นทุน FIFO และรายงานกำไรขั้นต้น |
 | [plan/pos-orders-reservations-spec.md](plan/pos-orders-reservations-spec.md) | กติกาออเดอร์และการจองสินค้า |
