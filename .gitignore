@@ -1,0 +1,7 @@
+node_modules/
+apps/web/dist/
+data/
+*.tsbuildinfo
+.vite/
+data-dev/
+.claude/settings.local.json
