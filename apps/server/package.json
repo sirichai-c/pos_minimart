@@ -1,0 +1,17 @@
+{
+  "name": "@pos/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/app.ts", "./*": "./src/*" },
+  "dependencies": {
+    "@fastify/cookie": "11.1.5",
+    "@fastify/static": "10.1.8",
+    "@node-rs/argon2": "2.2.2",
+    "@pos/contracts": "0.1.0",
+    "@pos/domain": "0.1.0",
+    "better-sqlite3": "13.0.3",
+    "fastify": "5.12.7"
+  },
+  "devDependencies": { "@types/better-sqlite3": "9.6.0" }
+}

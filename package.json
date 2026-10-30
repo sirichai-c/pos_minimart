@@ -1,0 +1,41 @@
+{
+  "name": "baandee-pos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "บ้านดี POS ระบบขายหน้าร้านแบบ local-first",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "workspaces": [
+    "packages/domain",
+    "packages/contracts",
+    "apps/server",
+    "apps/web"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p packages/domain && tsc -p packages/contracts && tsc -p apps/server && tsc -p apps/web && tsc -p tests",
+    "lint": "eslint .",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:acceptance": "node scripts/run-acceptance.mjs",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && vitest run",
+    "build": "vite build apps/web",
+    "dev:server": "node --watch apps/server/src/main.ts",
+    "dev:web": "vite apps/web",
+    "start:prod": "node apps/server/src/main.ts",
+    "migrate": "node apps/server/src/cli/migrate.ts",
+    "backup:now": "node apps/server/src/cli/backup-now.ts",
+    "restore": "node apps/server/src/cli/restore.ts",
+    "seed:demo": "node scripts/seed-demo.ts",
+    "bench": "node scripts/bench.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
+  }
+}
